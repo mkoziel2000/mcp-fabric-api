@@ -80,6 +80,23 @@ export interface LakehouseTable {
   format: string;
 }
 
+export interface WarehouseProperties {
+  connectionString?: string;
+  provisioningStatus?: string;
+}
+
+export interface SqlQueryResult {
+  columns: string[];
+  rows: Record<string, unknown>[];
+  rowCount: number;
+}
+
+export interface KqlQueryResult {
+  columns: string[];
+  rows: Record<string, unknown>[];
+  rowCount: number;
+}
+
 export interface ScheduleConfig {
   id?: string;
   enabled: boolean;

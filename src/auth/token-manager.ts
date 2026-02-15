@@ -2,6 +2,8 @@ import { DefaultAzureCredential, type AccessToken } from "@azure/identity";
 
 const FABRIC_SCOPE = "https://api.fabric.microsoft.com/.default";
 const POWERBI_SCOPE = "https://analysis.windows.net/powerbi/api/.default";
+const DATABASE_SCOPE = "https://database.windows.net/.default";
+const KUSTO_SCOPE = "https://api.kusto.windows.net/.default";
 const REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
 
 export class TokenManager {
@@ -32,13 +34,13 @@ export class TokenManager {
     return this.currentTenantId;
   }
 
-  getCachedToken(scope: "fabric" | "powerbi"): AccessToken | undefined {
-    const scopeUrl = scope === "fabric" ? FABRIC_SCOPE : POWERBI_SCOPE;
+  getCachedToken(scope: "fabric" | "powerbi" | "database" | "kusto"): AccessToken | undefined {
+    const scopeUrl = scope === "fabric" ? FABRIC_SCOPE : scope === "powerbi" ? POWERBI_SCOPE : scope === "kusto" ? KUSTO_SCOPE : DATABASE_SCOPE;
     return this.cache.get(scopeUrl);
   }
 
-  async getToken(scope: "fabric" | "powerbi"): Promise<string> {
-    const scopeUrl = scope === "fabric" ? FABRIC_SCOPE : POWERBI_SCOPE;
+  async getToken(scope: "fabric" | "powerbi" | "database" | "kusto"): Promise<string> {
+    const scopeUrl = scope === "fabric" ? FABRIC_SCOPE : scope === "powerbi" ? POWERBI_SCOPE : scope === "kusto" ? KUSTO_SCOPE : DATABASE_SCOPE;
     const cached = this.cache.get(scopeUrl);
     if (cached && cached.expiresOnTimestamp - Date.now() > REFRESH_BUFFER_MS) {
       return cached.token;
@@ -67,5 +69,13 @@ export class TokenManager {
 
   async getPowerBIToken(): Promise<string> {
     return this.getToken("powerbi");
+  }
+
+  async getDatabaseToken(): Promise<string> {
+    return this.getToken("database");
+  }
+
+  async getKustoToken(): Promise<string> {
+    return this.getToken("kusto");
   }
 }
