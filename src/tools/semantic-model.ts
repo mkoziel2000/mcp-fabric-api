@@ -43,17 +43,63 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
 
   server.tool(
     "semantic_model_create",
-    "Create a new semantic model in a workspace (long-running operation)",
+    "Create a new semantic model with a BIM/JSON definition (long-running). Accepts the raw model.bim JSON string as the definition.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       displayName: z.string().describe("Display name for the semantic model"),
       description: z.string().optional().describe("Description of the semantic model"),
+      definition: z.string().describe("The full model.bim JSON content as a string"),
     },
-    async ({ workspaceId, displayName, description }) => {
+    async ({ workspaceId, displayName, description, definition }) => {
       try {
-        const body: Record<string, unknown> = { displayName };
+        const body: Record<string, unknown> = {
+          displayName,
+          definition: {
+            parts: [
+              {
+                path: "definition/model.bim",
+                payload: encodeBase64(definition),
+                payloadType: "InlineBase64",
+              },
+            ],
+          },
+        };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/semanticModels`, body);
+        if (response.lro) {
+          const state = await pollOperation(fabricClient, response.lro.operationId);
+          const result = await getOperationResult(fabricClient, response.lro.operationId);
+          return { content: [{ type: "text", text: JSON.stringify({ operation: state, item: result ?? response.data }, null, 2) }] };
+        }
+        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "semantic_model_create_tmdl",
+    "Create a new semantic model with a TMDL definition (long-running). Accepts an array of TMDL files with path and content as the definition.",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      displayName: z.string().describe("Display name for the semantic model"),
+      description: z.string().optional().describe("Description of the semantic model"),
+      files: z.array(z.object({
+        path: z.string().describe("The TMDL file path (e.g., 'model.tmdl', 'definition/tables/Sales.tmdl')"),
+        content: z.string().describe("The TMDL file content"),
+      })).describe("Array of TMDL files for the initial definition"),
+    },
+    async ({ workspaceId, displayName, description, files }) => {
+      try {
+        const body: Record<string, unknown> = {
+          displayName,
+          definition: {
+            parts: encodeTmdlParts(files),
+          },
+        };
+        if (description) body.description = description;
+        const response = await fabricClient.post(`/workspaces/${workspaceId}/semanticModels?format=TMDL`, body);
         if (response.lro) {
           const state = await pollOperation(fabricClient, response.lro.operationId);
           const result = await getOperationResult(fabricClient, response.lro.operationId);

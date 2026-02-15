@@ -1,6 +1,6 @@
 # mcp-fabric-api
 
-MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. Built for data engineers and data analysts who want to use AI assistants beyond Copilot — such as Claude, Claude Code, or any MCP-compatible client — to build and manage their Fabric components. Covers lakehouses, notebooks, pipelines, semantic models, reports, dataflows, eventhouses, and more.
+MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. Built for data engineers and data analysts who want to use AI assistants beyond Copilot — such as Claude, Claude Code, or any MCP-compatible client — to build and manage their Fabric components. Covers workspaces, lakehouses, warehouses, notebooks, pipelines, semantic models, reports, dataflows, eventhouses, eventstreams, reflexes, GraphQL APIs, and SQL endpoints.
 
 ## Prerequisites
 
@@ -85,7 +85,7 @@ npm run dev          # Watch mode
 npm run inspect      # Launch MCP Inspector
 ```
 
-## Tools
+## Tools (97 total)
 
 ### Auth (4 tools)
 | Tool | Description |
@@ -116,6 +116,17 @@ npm run inspect      # Launch MCP Inspector
 | `lakehouse_list_tables` | List all tables in a lakehouse |
 | `lakehouse_load_table` | Load data into a table from OneLake (LRO) |
 | `lakehouse_get_sql_endpoint` | Get SQL endpoint details |
+
+### Warehouse (7 tools)
+| Tool | Description |
+|------|-------------|
+| `warehouse_list` | List all warehouses in a workspace |
+| `warehouse_get` | Get warehouse details including connection string and provisioning status |
+| `warehouse_create` | Create a new warehouse (LRO) |
+| `warehouse_update` | Update warehouse name or description |
+| `warehouse_delete` | Delete a warehouse |
+| `warehouse_get_sql_endpoint` | Get SQL connection details for a warehouse |
+| `warehouse_list_tables` | List all tables in a warehouse |
 
 ### Notebook (10 tools)
 | Tool | Description |
@@ -148,12 +159,13 @@ npm run inspect      # Launch MCP Inspector
 | `pipeline_update_schedule` | Update a pipeline schedule |
 | `pipeline_delete_schedule` | Delete a pipeline schedule |
 
-### Semantic Model (11 tools)
+### Semantic Model (12 tools)
 | Tool | Description |
 |------|-------------|
 | `semantic_model_list` | List all semantic models |
 | `semantic_model_get` | Get semantic model details |
-| `semantic_model_create` | Create a new semantic model (LRO) |
+| `semantic_model_create` | Create a semantic model with a BIM/JSON definition (LRO) |
+| `semantic_model_create_tmdl` | Create a semantic model with a TMDL definition (LRO) |
 | `semantic_model_update` | Update semantic model name or description |
 | `semantic_model_delete` | Delete a semantic model |
 | `semantic_model_refresh` | Trigger a model refresh (Power BI API) |
@@ -188,7 +200,7 @@ npm run inspect      # Launch MCP Inspector
 | `dataflow_refresh` | Trigger a dataflow refresh |
 | `dataflow_get_refresh_status` | Get refresh job status |
 
-### Eventhouse (5 tools)
+### Eventhouse (7 tools)
 | Tool | Description |
 |------|-------------|
 | `eventhouse_list` | List all eventhouses |
@@ -196,6 +208,8 @@ npm run inspect      # Launch MCP Inspector
 | `eventhouse_create` | Create a new eventhouse (LRO) |
 | `eventhouse_update` | Update eventhouse name or description |
 | `eventhouse_delete` | Delete an eventhouse |
+| `eventhouse_get_sql_endpoint` | Get query service URI and connection details |
+| `eventhouse_execute_kql` | Execute a KQL query against a KQL database |
 
 ### Eventstream (7 tools)
 | Tool | Description |
@@ -229,12 +243,13 @@ npm run inspect      # Launch MCP Inspector
 | `graphql_api_get_definition` | Get GraphQL schema definition |
 | `graphql_api_execute_query` | Execute a GraphQL query |
 
-### SQL Endpoint (3 tools)
+### SQL Endpoint (4 tools)
 | Tool | Description |
 |------|-------------|
 | `sql_endpoint_list` | List all SQL endpoints |
 | `sql_endpoint_get` | Get SQL endpoint details |
 | `sql_endpoint_get_connection_string` | Get TDS connection string |
+| `sql_endpoint_execute_query` | Execute a T-SQL query against a SQL endpoint |
 
 ## License
 
