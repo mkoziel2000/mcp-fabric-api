@@ -57,8 +57,13 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
           definition: {
             parts: [
               {
-                path: "definition/model.bim",
+                path: "model.bim",
                 payload: encodeBase64(definition),
+                payloadType: "InlineBase64",
+              },
+              {
+                path: "definition.pbism",
+                payload: encodeBase64(JSON.stringify({ version: "1.0", settings: {} })),
                 payloadType: "InlineBase64",
               },
             ],
@@ -92,11 +97,17 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
     },
     async ({ workspaceId, displayName, description, files }) => {
       try {
+        const parts = encodeTmdlParts(files);
+        if (!files.some((f) => f.path === "definition.pbism")) {
+          parts.push({
+            path: "definition.pbism",
+            payload: Buffer.from(JSON.stringify({ version: "4.0", settings: {} }), "utf-8").toString("base64"),
+            payloadType: "InlineBase64",
+          });
+        }
         const body: Record<string, unknown> = {
           displayName,
-          definition: {
-            parts: encodeTmdlParts(files),
-          },
+          definition: { parts },
         };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/semanticModels?format=TMDL`, body);
@@ -285,8 +296,13 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
           definition: {
             parts: [
               {
-                path: "definition/model.bim",
+                path: "model.bim",
                 payload: encodeBase64(definition),
+                payloadType: "InlineBase64",
+              },
+              {
+                path: "definition.pbism",
+                payload: encodeBase64(JSON.stringify({ version: "1.0", settings: {} })),
                 payloadType: "InlineBase64",
               },
             ],
@@ -320,10 +336,16 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
     },
     async ({ workspaceId, semanticModelId, files }) => {
       try {
+        const parts = encodeTmdlParts(files);
+        if (!files.some((f) => f.path === "definition.pbism")) {
+          parts.push({
+            path: "definition.pbism",
+            payload: Buffer.from(JSON.stringify({ version: "4.0", settings: {} }), "utf-8").toString("base64"),
+            payloadType: "InlineBase64",
+          });
+        }
         const body = {
-          definition: {
-            parts: encodeTmdlParts(files),
-          },
+          definition: { parts },
         };
         const response = await fabricClient.post(
           `/workspaces/${workspaceId}/semanticModels/${semanticModelId}/updateDefinition?format=TMDL`,

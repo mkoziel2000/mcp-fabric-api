@@ -16,7 +16,10 @@
       "WebFetch(domain:powerbi.microsoft.com)",
       "WebFetch(domain:fabric.guru)",
       "WebFetch(domain:community.fabric.microsoft.com)",
-      "WebFetch(domain:blog.fabric.microsoft.com)"
+      "WebFetch(domain:blog.fabric.microsoft.com)",
+      "WebFetch(domain:registry.terraform.io)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:medium.com)"
     ]
   }
 }
