@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:tmaestrini.github.io)",
+      "WebFetch(domain:blog.fka.dev)",
+      "WebFetch(domain:mcpcat.io)",
+      "WebFetch(domain:www.mcpevals.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npm view:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(node -e:*)",
+      "WebFetch(domain:powerbi.microsoft.com)"
+    ]
+  }
+}
