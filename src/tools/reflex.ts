@@ -5,8 +5,9 @@ import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { decodeBase64 } from "../utils/base64.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
 
-export function registerReflexTools(server: McpServer, fabricClient: FabricClient) {
+export function registerReflexTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "reflex_list",
     "List all Reflex (Activator) items in a workspace",
@@ -48,6 +49,7 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
     },
     async ({ workspaceId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = { displayName, type: "Reflex" };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/items`, body);
@@ -69,6 +71,7 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
     },
     async ({ workspaceId, reflexId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -89,6 +92,7 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
     },
     async ({ workspaceId, reflexId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}/items/${reflexId}`);
         return { content: [{ type: "text", text: `Reflex ${reflexId} deleted successfully` }] };
       } catch (error) {

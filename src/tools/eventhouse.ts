@@ -5,8 +5,9 @@ import { KustoClient } from "../client/kusto-client.js";
 import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
 
-export function registerEventhouseTools(server: McpServer, fabricClient: FabricClient, kustoClient: KustoClient) {
+export function registerEventhouseTools(server: McpServer, fabricClient: FabricClient, kustoClient: KustoClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "eventhouse_list",
     "List all eventhouses in a workspace",
@@ -48,6 +49,7 @@ export function registerEventhouseTools(server: McpServer, fabricClient: FabricC
     },
     async ({ workspaceId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = { displayName };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/eventhouses`, body);
@@ -74,6 +76,7 @@ export function registerEventhouseTools(server: McpServer, fabricClient: FabricC
     },
     async ({ workspaceId, eventhouseId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -94,6 +97,7 @@ export function registerEventhouseTools(server: McpServer, fabricClient: FabricC
     },
     async ({ workspaceId, eventhouseId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}/eventhouses/${eventhouseId}`);
         return { content: [{ type: "text", text: `Eventhouse ${eventhouseId} deleted successfully` }] };
       } catch (error) {

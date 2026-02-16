@@ -5,8 +5,9 @@ import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { runOnDemandJob, getJobInstance, cancelJobInstance, listJobInstances } from "../core/job-scheduler.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
 
-export function registerPipelineTools(server: McpServer, fabricClient: FabricClient) {
+export function registerPipelineTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "pipeline_list",
     "List all data pipelines in a workspace",
@@ -48,6 +49,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = { displayName };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/dataPipelines`, body);
@@ -74,6 +76,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, pipelineId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -94,6 +97,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, pipelineId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}/dataPipelines/${pipelineId}`);
         return { content: [{ type: "text", text: `Pipeline ${pipelineId} deleted successfully` }] };
       } catch (error) {
@@ -211,6 +215,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, pipelineId, startDateTime, endDateTime, localTimeZoneId, type, interval, weekDays, times, enabled }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const configuration: Record<string, unknown> = { type, startDateTime };
         if (endDateTime) configuration.endDateTime = endDateTime;
         if (localTimeZoneId) configuration.localTimeZoneId = localTimeZoneId;
@@ -245,6 +250,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, pipelineId, scheduleId, enabled, configuration }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (enabled !== undefined) body.enabled = enabled;
         if (configuration) body.configuration = configuration;
@@ -269,6 +275,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, pipelineId, scheduleId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(
           `/workspaces/${workspaceId}/items/${pipelineId}/jobSchedules/${scheduleId}`
         );

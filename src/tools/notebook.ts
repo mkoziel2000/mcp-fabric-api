@@ -6,8 +6,10 @@ import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { runOnDemandJob, getJobInstance, cancelJobInstance } from "../core/job-scheduler.js";
 import { decodeBase64, encodeBase64 } from "../utils/base64.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
+import { resolveContentOrFile } from "../utils/file-reader.js";
 
-export function registerNotebookTools(server: McpServer, fabricClient: FabricClient) {
+export function registerNotebookTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "notebook_list",
     "List all notebooks in a workspace",
@@ -49,6 +51,7 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = { displayName };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/notebooks`, body);
@@ -75,6 +78,7 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, notebookId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -95,6 +99,7 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, notebookId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}/notebooks/${notebookId}`);
         return { content: [{ type: "text", text: `Notebook ${notebookId} deleted successfully` }] };
       } catch (error) {
@@ -147,21 +152,24 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
 
   server.tool(
     "notebook_update_definition",
-    "Update the content/definition of a notebook (long-running, accepts raw content that will be base64 encoded)",
+    "Update the content/definition of a notebook (long-running). Accepts raw content inline or a file path reference.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       notebookId: z.string().describe("The notebook ID"),
-      content: z.string().describe("The notebook content (will be base64 encoded)"),
+      content: z.string().optional().describe("The notebook content (will be base64 encoded)"),
+      contentFilePath: z.string().optional().describe("Path to a file containing the notebook content (alternative to inline content)"),
       path: z.string().optional().describe("The definition part path (default: notebook-content.py)"),
     },
-    async ({ workspaceId, notebookId, content, path }) => {
+    async ({ workspaceId, notebookId, content, contentFilePath, path }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        const resolved = await resolveContentOrFile(content, contentFilePath, "content");
         const body = {
           definition: {
             parts: [
               {
                 path: path ?? "notebook-content.py",
-                payload: encodeBase64(content),
+                payload: encodeBase64(resolved),
                 payloadType: "InlineBase64",
               },
             ],

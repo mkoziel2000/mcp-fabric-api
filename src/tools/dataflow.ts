@@ -4,8 +4,9 @@ import { FabricClient } from "../client/fabric-client.js";
 import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { runOnDemandJob, getJobInstance, cancelJobInstance } from "../core/job-scheduler.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
 
-export function registerDataflowTools(server: McpServer, fabricClient: FabricClient) {
+export function registerDataflowTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "dataflow_list",
     "List all Dataflow Gen2 items in a workspace",
@@ -47,6 +48,7 @@ export function registerDataflowTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = { displayName, type: "DataflowGen2" };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/items`, body);
@@ -68,6 +70,7 @@ export function registerDataflowTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, dataflowId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -88,6 +91,7 @@ export function registerDataflowTools(server: McpServer, fabricClient: FabricCli
     },
     async ({ workspaceId, dataflowId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}/items/${dataflowId}`);
         return { content: [{ type: "text", text: `Dataflow ${dataflowId} deleted successfully` }] };
       } catch (error) {

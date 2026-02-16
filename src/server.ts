@@ -18,6 +18,7 @@ import { registerSqlEndpointTools } from "./tools/sql-endpoint.js";
 import { registerAuthTools } from "./tools/auth.js";
 import { SqlClient } from "./client/sql-client.js";
 import { KustoClient } from "./client/kusto-client.js";
+import { WorkspaceGuard } from "./core/workspace-guard.js";
 
 export interface CreateServerOptions {
   tokenManager?: TokenManager;
@@ -26,7 +27,7 @@ export interface CreateServerOptions {
 export function createServer(options?: CreateServerOptions): McpServer {
   const server = new McpServer({
     name: "mcp-fabric-api",
-    version: "1.1.0",
+    version: "1.3.0",
   });
 
   const tokenManager = options?.tokenManager ?? new TokenManager();
@@ -34,20 +35,21 @@ export function createServer(options?: CreateServerOptions): McpServer {
   const powerBIClient = new PowerBIClient(tokenManager);
   const sqlClient = new SqlClient(tokenManager);
   const kustoClient = new KustoClient(tokenManager);
+  const workspaceGuard = new WorkspaceGuard();
 
   // Register all domain tools
-  registerWorkspaceTools(server, fabricClient);
-  registerLakehouseTools(server, fabricClient);
-  registerWarehouseTools(server, fabricClient);
-  registerNotebookTools(server, fabricClient);
-  registerPipelineTools(server, fabricClient);
-  registerSemanticModelTools(server, fabricClient, powerBIClient);
-  registerReportTools(server, fabricClient, powerBIClient);
-  registerDataflowTools(server, fabricClient);
-  registerEventhouseTools(server, fabricClient, kustoClient);
-  registerEventstreamTools(server, fabricClient);
-  registerReflexTools(server, fabricClient);
-  registerGraphQLApiTools(server, fabricClient, powerBIClient);
+  registerWorkspaceTools(server, fabricClient, workspaceGuard);
+  registerLakehouseTools(server, fabricClient, workspaceGuard);
+  registerWarehouseTools(server, fabricClient, workspaceGuard);
+  registerNotebookTools(server, fabricClient, workspaceGuard);
+  registerPipelineTools(server, fabricClient, workspaceGuard);
+  registerSemanticModelTools(server, fabricClient, powerBIClient, workspaceGuard);
+  registerReportTools(server, fabricClient, powerBIClient, workspaceGuard);
+  registerDataflowTools(server, fabricClient, workspaceGuard);
+  registerEventhouseTools(server, fabricClient, kustoClient, workspaceGuard);
+  registerEventstreamTools(server, fabricClient, workspaceGuard);
+  registerReflexTools(server, fabricClient, workspaceGuard);
+  registerGraphQLApiTools(server, fabricClient, powerBIClient, workspaceGuard);
   registerSqlEndpointTools(server, fabricClient, sqlClient);
   registerAuthTools(server, tokenManager);
 

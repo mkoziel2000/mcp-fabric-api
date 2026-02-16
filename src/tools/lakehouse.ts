@@ -4,8 +4,9 @@ import { FabricClient } from "../client/fabric-client.js";
 import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { pollOperation } from "../core/lro.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
 
-export function registerLakehouseTools(server: McpServer, fabricClient: FabricClient) {
+export function registerLakehouseTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "lakehouse_list",
     "List all lakehouses in a workspace",
@@ -39,16 +40,19 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
 
   server.tool(
     "lakehouse_create",
-    "Create a new lakehouse in a workspace (long-running operation)",
+    "Create a new lakehouse in a workspace (long-running operation). Schemas are enabled by default (preview).",
     {
       workspaceId: z.string().describe("The workspace ID"),
       displayName: z.string().describe("Display name for the lakehouse"),
       description: z.string().optional().describe("Description of the lakehouse"),
+      enableSchemas: z.boolean().default(true).describe("Create a schema-enabled lakehouse (preview). Defaults to true. Set to false for a classic lakehouse without schema support."),
     },
-    async ({ workspaceId, displayName, description }) => {
+    async ({ workspaceId, displayName, description, enableSchemas }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = { displayName };
         if (description) body.description = description;
+        if (enableSchemas) body.creationPayload = { enableSchemas: true };
         const response = await fabricClient.post(`/workspaces/${workspaceId}/lakehouses`, body);
         if (response.lro) {
           const state = await pollOperation(fabricClient, response.lro.operationId);
@@ -72,6 +76,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
     },
     async ({ workspaceId, lakehouseId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -92,6 +97,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
     },
     async ({ workspaceId, lakehouseId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}/lakehouses/${lakehouseId}`);
         return { content: [{ type: "text", text: `Lakehouse ${lakehouseId} deleted successfully` }] };
       } catch (error) {
@@ -135,6 +141,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
     },
     async ({ workspaceId, lakehouseId, tableName, relativePath, pathType, mode, formatOptions }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = { relativePath, pathType };
         if (mode) body.mode = mode;
         if (formatOptions) body.formatOptions = formatOptions;
@@ -147,6 +154,99 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
           return { content: [{ type: "text", text: JSON.stringify(state, null, 2) }] };
         }
         return { content: [{ type: "text", text: "Table load initiated successfully" }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "lakehouse_create_shortcut",
+    "Create a OneLake shortcut in a lakehouse at any level (file, folder, table, or schema). " +
+    "For schema-enabled lakehouses (preview): set path='Tables' and name to the desired schema name to create a schema shortcut that imports all Delta tables from the target as a new schema. " +
+    "For table-level shortcuts within a schema: set path='Tables/<schemaName>'. " +
+    "Supports targets: OneLake, ADLS Gen2, Amazon S3, Google Cloud Storage, S3 Compatible, Dataverse, Azure Blob Storage, OneDrive/SharePoint.",
+    {
+      workspaceId: z.string().describe("The workspace ID where the lakehouse resides"),
+      lakehouseId: z.string().describe("The lakehouse ID (item ID) where the shortcut will be created"),
+      name: z.string().describe("Name of the shortcut. For schema shortcuts, this becomes the schema name."),
+      path: z.string().describe(
+        "Full path where the shortcut is created. Must start with 'Files' or 'Tables'. " +
+        "Examples: 'Files' (file at root), 'Files/landingZone' (file in subfolder), " +
+        "'Tables' (schema shortcut — name becomes the schema, target should be a schema or folder of Delta tables), " +
+        "'Tables/dbo' (table shortcut within the dbo schema), " +
+        "'Tables/mySchema' (table shortcut within a custom schema)"
+      ),
+      shortcutConflictPolicy: z.enum(["Abort", "GenerateUniqueName", "CreateOrOverwrite", "OverwriteOnly"]).optional()
+        .describe("Action when a shortcut with the same name and path already exists (default: Abort)"),
+      target: z.object({
+        oneLake: z.object({
+          workspaceId: z.string().describe("Target workspace ID"),
+          itemId: z.string().describe("Target item ID (Lakehouse, KQLDatabase, or Warehouse)"),
+          path: z.string().describe("Full path to target folder relative to item root, e.g. 'Tables/myTable' or 'Files/myFolder'"),
+          connectionId: z.string().optional().describe("Optional connection ID for cross-tenant shortcuts"),
+        }).optional().describe("Target a OneLake location"),
+        adlsGen2: z.object({
+          location: z.string().describe("ADLS account URL, e.g. https://account.dfs.core.windows.net"),
+          subpath: z.string().describe("Container and subfolder, e.g. /mycontainer/mysubfolder"),
+          connectionId: z.string().describe("Cloud connection ID (GUID)"),
+        }).optional().describe("Target an Azure Data Lake Storage Gen2 location"),
+        amazonS3: z.object({
+          location: z.string().describe("S3 bucket URL, e.g. https://bucket.s3.us-west-2.amazonaws.com"),
+          subpath: z.string().describe("Target folder within the S3 bucket"),
+          connectionId: z.string().describe("Cloud connection ID (GUID)"),
+        }).optional().describe("Target an Amazon S3 location"),
+        googleCloudStorage: z.object({
+          location: z.string().describe("GCS bucket URL, e.g. https://bucket.storage.googleapis.com"),
+          subpath: z.string().describe("Target folder within the GCS bucket"),
+          connectionId: z.string().describe("Cloud connection ID (GUID)"),
+        }).optional().describe("Target a Google Cloud Storage location"),
+        s3Compatible: z.object({
+          location: z.string().describe("S3 compatible endpoint URL, e.g. https://s3endpoint.contoso.com"),
+          bucket: z.string().describe("Target bucket name"),
+          subpath: z.string().describe("Target folder within the bucket"),
+          connectionId: z.string().describe("Cloud connection ID (GUID)"),
+        }).optional().describe("Target an S3 compatible storage location"),
+        dataverse: z.object({
+          environmentDomain: z.string().describe("Dataverse environment URL, e.g. https://org.crm.dynamics.com"),
+          tableName: z.string().describe("Target Dataverse table name"),
+          deltaLakeFolder: z.string().describe("DeltaLake folder path where target data is stored"),
+          connectionId: z.string().describe("Cloud connection ID (GUID)"),
+        }).optional().describe("Target a Dataverse location"),
+        azureBlobStorage: z.object({
+          location: z.string().describe("Azure Blob Storage URL, e.g. https://account.blob.core.windows.net"),
+          subpath: z.string().describe("Container and subfolder, e.g. /mycontainer/mysubfolder"),
+          connectionId: z.string().describe("Cloud connection ID (GUID)"),
+        }).optional().describe("Target an Azure Blob Storage location"),
+        oneDriveSharePoint: z.object({
+          location: z.string().describe("SharePoint URL, e.g. https://contoso.sharepoint.com"),
+          subpath: z.string().describe("Document library path, e.g. /Shared Documents/folder"),
+          connectionId: z.string().describe("Cloud connection ID (GUID)"),
+        }).optional().describe("Target a OneDrive for Business or SharePoint Online location"),
+      }).describe("Target datasource — specify exactly one: oneLake, adlsGen2, amazonS3, googleCloudStorage, s3Compatible, dataverse, azureBlobStorage, or oneDriveSharePoint"),
+    },
+    async ({ workspaceId, lakehouseId, name, path, shortcutConflictPolicy, target }) => {
+      try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+
+        const targetKeys = Object.keys(target).filter(
+          (k) => target[k as keyof typeof target] !== undefined
+        );
+        if (targetKeys.length !== 1) {
+          return {
+            content: [{ type: "text" as const, text: "Error: Specify exactly one target type (oneLake, adlsGen2, amazonS3, googleCloudStorage, s3Compatible, dataverse, azureBlobStorage, or oneDriveSharePoint)" }],
+            isError: true,
+          };
+        }
+
+        const body = { name, path, target };
+        let url = `/workspaces/${workspaceId}/items/${lakehouseId}/shortcuts`;
+        if (shortcutConflictPolicy) {
+          url += `?shortcutConflictPolicy=${shortcutConflictPolicy}`;
+        }
+
+        const response = await fabricClient.post(url, body);
+        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
       } catch (error) {
         return formatToolError(error);
       }

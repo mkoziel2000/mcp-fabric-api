@@ -1,6 +1,6 @@
 {
   "name": "@einlogic/mcp-fabric-api",
-  "version": "1.2.1",
+  "version": "1.4.0",
   "description": "MCP server for Microsoft Fabric REST APIs — enables data engineers and data analysts to use AI assistants beyond Copilot to build and manage Fabric components",
   "type": "module",
   "main": "build/index.js",

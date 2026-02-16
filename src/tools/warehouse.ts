@@ -4,8 +4,9 @@ import { FabricClient } from "../client/fabric-client.js";
 import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
 
-export function registerWarehouseTools(server: McpServer, fabricClient: FabricClient) {
+export function registerWarehouseTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "warehouse_list",
     "List all warehouses in a workspace",
@@ -47,6 +48,7 @@ export function registerWarehouseTools(server: McpServer, fabricClient: FabricCl
     },
     async ({ workspaceId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = { displayName };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/warehouses`, body);
@@ -73,6 +75,7 @@ export function registerWarehouseTools(server: McpServer, fabricClient: FabricCl
     },
     async ({ workspaceId, warehouseId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -93,6 +96,7 @@ export function registerWarehouseTools(server: McpServer, fabricClient: FabricCl
     },
     async ({ workspaceId, warehouseId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}/warehouses/${warehouseId}`);
         return { content: [{ type: "text", text: `Warehouse ${warehouseId} deleted successfully` }] };
       } catch (error) {

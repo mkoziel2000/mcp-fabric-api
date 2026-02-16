@@ -6,8 +6,11 @@ import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { encodeBase64, decodeBase64 } from "../utils/base64.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
+import { resolveFilesOrDirectory } from "../utils/file-reader.js";
+import type { FileEntry } from "../utils/file-reader.js";
 
-export function registerReportTools(server: McpServer, fabricClient: FabricClient, powerBIClient: PowerBIClient) {
+export function registerReportTools(server: McpServer, fabricClient: FabricClient, powerBIClient: PowerBIClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "report_list",
     "List all reports in a workspace",
@@ -49,6 +52,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
     },
     async ({ workspaceId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = { displayName };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/reports`, body);
@@ -75,6 +79,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
     },
     async ({ workspaceId, reportId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -95,6 +100,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
     },
     async ({ workspaceId, reportId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}/reports/${reportId}`);
         return { content: [{ type: "text", text: `Report ${reportId} deleted successfully` }] };
       } catch (error) {
@@ -115,6 +121,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
     },
     async ({ workspaceId, reportId, name, targetWorkspaceId, targetModelId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, targetWorkspaceId ?? workspaceId);
         const body: Record<string, unknown> = { name };
         if (targetWorkspaceId) body.targetWorkspaceId = targetWorkspaceId;
         if (targetModelId) body.targetModelId = targetModelId;
@@ -214,20 +221,23 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
 
   server.tool(
     "report_update_definition",
-    "Update a report's full definition (PBIR or PBIR-Legacy). Accepts an array of definition parts with path and content. Each part is base64-encoded and sent to the API.",
+    "Update a report's full definition (PBIR or PBIR-Legacy). Accepts an array of definition parts inline or a directory path containing definition files.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       reportId: z.string().describe("The report ID"),
       parts: z.array(z.object({
         path: z.string().describe("The definition part path (e.g., 'definition/report.json', 'definition/pages/pages.json', 'definition.pbir')"),
         content: z.string().describe("The file content as a string"),
-      })).describe("Array of definition parts to upload"),
+      })).optional().describe("Array of definition parts to upload"),
+      partsDirectoryPath: z.string().optional().describe("Path to a directory containing report definition files (alternative to inline parts)"),
     },
-    async ({ workspaceId, reportId, parts }) => {
+    async ({ workspaceId, reportId, parts, partsDirectoryPath }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        const resolved: FileEntry[] = await resolveFilesOrDirectory(parts, partsDirectoryPath);
         const body = {
           definition: {
-            parts: parts.map((part) => ({
+            parts: resolved.map((part) => ({
               path: part.path,
               payload: encodeBase64(part.content),
               payloadType: "InlineBase64",

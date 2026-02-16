@@ -3,8 +3,9 @@ import { z } from "zod";
 import { FabricClient } from "../client/fabric-client.js";
 import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
 
-export function registerWorkspaceTools(server: McpServer, fabricClient: FabricClient) {
+export function registerWorkspaceTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "workspace_list",
     "List all accessible Fabric workspaces",
@@ -64,6 +65,7 @@ export function registerWorkspaceTools(server: McpServer, fabricClient: FabricCl
     },
     async ({ workspaceId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -81,6 +83,7 @@ export function registerWorkspaceTools(server: McpServer, fabricClient: FabricCl
     { workspaceId: z.string().describe("The workspace ID") },
     async ({ workspaceId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}`);
         return { content: [{ type: "text", text: `Workspace ${workspaceId} deleted successfully` }] };
       } catch (error) {

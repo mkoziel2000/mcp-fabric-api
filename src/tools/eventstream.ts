@@ -5,8 +5,10 @@ import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { decodeBase64, encodeBase64 } from "../utils/base64.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
+import { resolveContentOrFile } from "../utils/file-reader.js";
 
-export function registerEventstreamTools(server: McpServer, fabricClient: FabricClient) {
+export function registerEventstreamTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "eventstream_list",
     "List all eventstreams in a workspace",
@@ -48,6 +50,7 @@ export function registerEventstreamTools(server: McpServer, fabricClient: Fabric
     },
     async ({ workspaceId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = { displayName };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/eventstreams`, body);
@@ -74,6 +77,7 @@ export function registerEventstreamTools(server: McpServer, fabricClient: Fabric
     },
     async ({ workspaceId, eventstreamId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -94,6 +98,7 @@ export function registerEventstreamTools(server: McpServer, fabricClient: Fabric
     },
     async ({ workspaceId, eventstreamId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}/eventstreams/${eventstreamId}`);
         return { content: [{ type: "text", text: `Eventstream ${eventstreamId} deleted successfully` }] };
       } catch (error) {
@@ -136,21 +141,24 @@ export function registerEventstreamTools(server: McpServer, fabricClient: Fabric
 
   server.tool(
     "eventstream_update_definition",
-    "Update the definition of an eventstream (long-running, accepts raw content that will be base64 encoded)",
+    "Update the definition of an eventstream (long-running). Accepts raw content inline or a file path reference.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       eventstreamId: z.string().describe("The eventstream ID"),
-      content: z.string().describe("The eventstream definition content (will be base64 encoded)"),
+      content: z.string().optional().describe("The eventstream definition content (will be base64 encoded)"),
+      contentFilePath: z.string().optional().describe("Path to a file containing the eventstream definition (alternative to inline content)"),
       path: z.string().optional().describe("The definition part path (default: eventstream.json)"),
     },
-    async ({ workspaceId, eventstreamId, content, path }) => {
+    async ({ workspaceId, eventstreamId, content, contentFilePath, path }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        const resolved = await resolveContentOrFile(content, contentFilePath, "content");
         const body = {
           definition: {
             parts: [
               {
                 path: path ?? "eventstream.json",
-                payload: encodeBase64(content),
+                payload: encodeBase64(resolved),
                 payloadType: "InlineBase64",
               },
             ],

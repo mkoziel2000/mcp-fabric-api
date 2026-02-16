@@ -8,8 +8,10 @@ import { pollOperation, getOperationResult } from "../core/lro.js";
 import { encodeBase64, decodeBase64 } from "../utils/base64.js";
 import { decodeTmdlParts, encodeTmdlParts, formatTmdlOutput } from "../utils/tmdl.js";
 import type { DefinitionPart } from "../utils/tmdl.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
+import { resolveContentOrFile, resolveFilesOrDirectory } from "../utils/file-reader.js";
 
-export function registerSemanticModelTools(server: McpServer, fabricClient: FabricClient, powerBIClient: PowerBIClient) {
+export function registerSemanticModelTools(server: McpServer, fabricClient: FabricClient, powerBIClient: PowerBIClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "semantic_model_list",
     "List all semantic models in a workspace",
@@ -43,22 +45,25 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
 
   server.tool(
     "semantic_model_create",
-    "Create a new semantic model with a BIM/JSON definition (long-running). Accepts the raw model.bim JSON string as the definition.",
+    "Create a new semantic model with a BIM/JSON definition (long-running). Accepts the raw model.bim JSON string inline or via file path.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       displayName: z.string().describe("Display name for the semantic model"),
       description: z.string().optional().describe("Description of the semantic model"),
-      definition: z.string().describe("The full model.bim JSON content as a string"),
+      definition: z.string().optional().describe("The full model.bim JSON content as a string"),
+      definitionFilePath: z.string().optional().describe("Path to a file containing the model.bim JSON (alternative to inline definition)"),
     },
-    async ({ workspaceId, displayName, description, definition }) => {
+    async ({ workspaceId, displayName, description, definition, definitionFilePath }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        const resolved = await resolveContentOrFile(definition, definitionFilePath, "definition");
         const body: Record<string, unknown> = {
           displayName,
           definition: {
             parts: [
               {
                 path: "model.bim",
-                payload: encodeBase64(definition),
+                payload: encodeBase64(resolved),
                 payloadType: "InlineBase64",
               },
               {
@@ -85,7 +90,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
 
   server.tool(
     "semantic_model_create_tmdl",
-    "Create a new semantic model with a TMDL definition (long-running). Accepts an array of TMDL files with path and content as the definition.",
+    "Create a new semantic model with a TMDL definition (long-running). Accepts an array of TMDL files inline or a directory path containing .tmdl/.pbism files.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       displayName: z.string().describe("Display name for the semantic model"),
@@ -93,12 +98,15 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       files: z.array(z.object({
         path: z.string().describe("The TMDL file path (e.g., 'model.tmdl', 'definition/tables/Sales.tmdl')"),
         content: z.string().describe("The TMDL file content"),
-      })).describe("Array of TMDL files for the initial definition"),
+      })).optional().describe("Array of TMDL files for the initial definition"),
+      filesDirectoryPath: z.string().optional().describe("Path to a directory containing TMDL files (alternative to inline files)"),
     },
-    async ({ workspaceId, displayName, description, files }) => {
+    async ({ workspaceId, displayName, description, files, filesDirectoryPath }) => {
       try {
-        const parts = encodeTmdlParts(files);
-        if (!files.some((f) => f.path === "definition.pbism")) {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        const resolved = await resolveFilesOrDirectory(files, filesDirectoryPath, [".tmdl", ".pbism"]);
+        const parts = encodeTmdlParts(resolved);
+        if (!resolved.some((f) => f.path === "definition.pbism")) {
           parts.push({
             path: "definition.pbism",
             payload: Buffer.from(JSON.stringify({ version: "4.0", settings: {} }), "utf-8").toString("base64"),
@@ -134,6 +142,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
     },
     async ({ workspaceId, semanticModelId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -154,6 +163,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
     },
     async ({ workspaceId, semanticModelId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}/semanticModels/${semanticModelId}`);
         return { content: [{ type: "text", text: `Semantic model ${semanticModelId} deleted successfully` }] };
       } catch (error) {
@@ -284,20 +294,23 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
 
   server.tool(
     "semantic_model_update_definition",
-    "Update a semantic model's full definition from TMSL/BIM JSON (long-running). Accepts the raw model.bim JSON string.",
+    "Update a semantic model's full definition from TMSL/BIM JSON (long-running). Accepts the raw model.bim JSON string inline or via file path.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       semanticModelId: z.string().describe("The semantic model ID"),
-      definition: z.string().describe("The full model.bim JSON content as a string"),
+      definition: z.string().optional().describe("The full model.bim JSON content as a string"),
+      definitionFilePath: z.string().optional().describe("Path to a file containing the model.bim JSON (alternative to inline definition)"),
     },
-    async ({ workspaceId, semanticModelId, definition }) => {
+    async ({ workspaceId, semanticModelId, definition, definitionFilePath }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        const resolved = await resolveContentOrFile(definition, definitionFilePath, "definition");
         const body = {
           definition: {
             parts: [
               {
                 path: "model.bim",
-                payload: encodeBase64(definition),
+                payload: encodeBase64(resolved),
                 payloadType: "InlineBase64",
               },
               {
@@ -325,19 +338,22 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
 
   server.tool(
     "semantic_model_update_tmdl",
-    "Update a semantic model's definition from TMDL files (long-running). Accepts an array of TMDL files with path and content. This is the primary tool for LLMs to create/modify semantic models.",
+    "Update a semantic model's definition from TMDL files (long-running). Accepts an array of TMDL files inline or a directory path containing .tmdl/.pbism files.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       semanticModelId: z.string().describe("The semantic model ID"),
       files: z.array(z.object({
         path: z.string().describe("The TMDL file path (e.g., 'model.tmdl', 'definition/tables/Sales.tmdl')"),
         content: z.string().describe("The TMDL file content"),
-      })).describe("Array of TMDL files to upload"),
+      })).optional().describe("Array of TMDL files to upload"),
+      filesDirectoryPath: z.string().optional().describe("Path to a directory containing TMDL files (alternative to inline files)"),
     },
-    async ({ workspaceId, semanticModelId, files }) => {
+    async ({ workspaceId, semanticModelId, files, filesDirectoryPath }) => {
       try {
-        const parts = encodeTmdlParts(files);
-        if (!files.some((f) => f.path === "definition.pbism")) {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        const resolved = await resolveFilesOrDirectory(files, filesDirectoryPath, [".tmdl", ".pbism"]);
+        const parts = encodeTmdlParts(resolved);
+        if (!resolved.some((f) => f.path === "definition.pbism")) {
           parts.push({
             path: "definition.pbism",
             payload: Buffer.from(JSON.stringify({ version: "4.0", settings: {} }), "utf-8").toString("base64"),

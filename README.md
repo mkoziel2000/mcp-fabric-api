@@ -2,6 +2,8 @@
 
 MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. Built for data engineers and data analysts who want to use AI assistants beyond Copilot — such as Claude, Claude Code, or any MCP-compatible client — to build and manage their Fabric components. Covers workspaces, lakehouses, warehouses, notebooks, pipelines, semantic models, reports, dataflows, eventhouses, eventstreams, reflexes, GraphQL APIs, and SQL endpoints.
 
+> **Safe by default:** This server blocks all destructive operations (create, update, delete) until you explicitly configure the `WRITABLE_WORKSPACES` environment variable. Read operations always work. Set `WRITABLE_WORKSPACES="*"` to allow writes to all workspaces, or use patterns to limit access. See [Workspace Safety Guard](#workspace-safety-guard) for details.
+
 ## Prerequisites
 
 - Node.js 18+
@@ -73,6 +75,121 @@ The server exposes:
 - `DELETE /mcp` — Session cleanup
 - `GET /.well-known/oauth-protected-resource` — OAuth metadata
 
+### Workspace Safety Guard
+
+Control which workspaces allow write operations (create, update, delete) via the `WRITABLE_WORKSPACES` environment variable. Only workspaces matching the configured name patterns will permit CUD (Create, Update, Delete) operations. Read operations are never restricted.
+
+> **Default behavior: When `WRITABLE_WORKSPACES` is not set or empty, all destructive operations are blocked.** You must explicitly configure this variable to enable writes.
+
+| `WRITABLE_WORKSPACES` value | Behavior |
+|------------------------------|----------|
+| Not set / empty | **All writes blocked** (safe default) |
+| `*` | All workspaces writable |
+| `*-Dev,*-Test,Sandbox*` | Only matching workspaces writable |
+
+Set comma-separated glob patterns:
+
+```bash
+WRITABLE_WORKSPACES=*-Dev,*-Test,Sandbox*
+```
+
+**Wildcard examples:**
+- `*` matches all workspaces (allow everything)
+- `*-Dev` matches "Sales-Dev", "Finance-Dev"
+- `Sandbox*` matches "Sandbox-123", "Sandbox-Mike"
+- `Exact-Name` matches only "Exact-Name" (case-insensitive)
+
+**Guarded tools (47 total)** — every tool that creates, updates, or deletes workspace items:
+
+| Domain | Guarded tools |
+|--------|--------------|
+| Workspace | `workspace_update`, `workspace_delete` |
+| Lakehouse | `lakehouse_create`, `lakehouse_update`, `lakehouse_delete`, `lakehouse_load_table`, `lakehouse_create_shortcut` |
+| Warehouse | `warehouse_create`, `warehouse_update`, `warehouse_delete` |
+| Notebook | `notebook_create`, `notebook_update`, `notebook_delete`, `notebook_update_definition` |
+| Pipeline | `pipeline_create`, `pipeline_update`, `pipeline_delete`, `pipeline_create_schedule`, `pipeline_update_schedule`, `pipeline_delete_schedule` |
+| Semantic Model | `semantic_model_create`, `semantic_model_create_tmdl`, `semantic_model_update`, `semantic_model_delete`, `semantic_model_update_definition`, `semantic_model_update_tmdl` |
+| Report | `report_create`, `report_update`, `report_delete`, `report_clone`, `report_update_definition` |
+| Dataflow | `dataflow_create`, `dataflow_update`, `dataflow_delete` |
+| Eventhouse | `eventhouse_create`, `eventhouse_update`, `eventhouse_delete` |
+| Eventstream | `eventstream_create`, `eventstream_update`, `eventstream_delete`, `eventstream_update_definition` |
+| Reflex | `reflex_create`, `reflex_update`, `reflex_delete` |
+| GraphQL API | `graphql_api_create`, `graphql_api_update`, `graphql_api_delete` |
+
+**Not guarded:** Read operations (list, get, get_definition, get_status), query execution (DAX, KQL, SQL, GraphQL), run/refresh/cancel operations, and export operations.
+
+**Claude Desktop config with guard:**
+```json
+{
+  "mcpServers": {
+    "fabric": {
+      "command": "npx",
+      "args": ["-y", "@einlogic/mcp-fabric-api"],
+      "env": {
+        "WRITABLE_WORKSPACES": "*-Dev,*-Test,Sandbox*"
+      }
+    }
+  }
+}
+```
+
+**Claude Code CLI with guard:**
+```bash
+WRITABLE_WORKSPACES="*-Dev,*-Test" claude mcp add fabric -- npx -y @einlogic/mcp-fabric-api
+```
+
+**Error when not configured:**
+```
+WRITABLE_WORKSPACES is not configured. Destructive actions are blocked by default. Set WRITABLE_WORKSPACES to a comma-separated list of workspace name patterns, or "*" to allow all.
+```
+
+**Error when workspace not in allow list:**
+```
+Workspace "Production-Analytics" is not in the writable workspaces list. Allowed patterns: *-Dev, *-Test, Sandbox*
+```
+
+### File Path References
+
+Some tools accept large payloads (notebook code, model.bim JSON, TMDL files, report definitions) that may exceed message size limits. Instead of passing content inline, you can write payloads to local files and pass file paths.
+
+**Single-content tools** — use `contentFilePath` or `definitionFilePath` instead of inline content:
+
+| Tool | File path parameter |
+|------|-------------------|
+| `notebook_update_definition` | `contentFilePath` |
+| `semantic_model_create` | `definitionFilePath` |
+| `semantic_model_update_definition` | `definitionFilePath` |
+| `eventstream_update_definition` | `contentFilePath` |
+
+**Multi-file tools** — use `filesDirectoryPath` or `partsDirectoryPath` instead of inline file arrays:
+
+| Tool | Directory path parameter | Extension filter |
+|------|------------------------|-----------------|
+| `semantic_model_create_tmdl` | `filesDirectoryPath` | `.tmdl`, `.pbism` |
+| `semantic_model_update_tmdl` | `filesDirectoryPath` | `.tmdl`, `.pbism` |
+| `report_update_definition` | `partsDirectoryPath` | all files |
+
+**Example — inline vs file path:**
+```json
+// Inline (may hit size limits)
+{ "content": "# Notebook code\nprint('hello')" }
+
+// File path reference
+{ "contentFilePath": "/tmp/notebook-content.py" }
+```
+
+**TMDL directory structure example:**
+```
+/tmp/my-model/
+  model.tmdl
+  definition.pbism
+  definition/
+    tables/
+      Sales.tmdl
+      Product.tmdl
+    relationships.tmdl
+```
+
 ## Development
 
 ```bash
@@ -85,7 +202,7 @@ npm run dev          # Watch mode
 npm run inspect      # Launch MCP Inspector
 ```
 
-## Tools (97 total)
+## Tools (98 total)
 
 ### Auth (4 tools)
 | Tool | Description |
@@ -105,16 +222,17 @@ npm run inspect      # Launch MCP Inspector
 | `workspace_delete` | Delete a workspace |
 | `workspace_list_items` | List all items in a workspace (with optional type filter) |
 
-### Lakehouse (8 tools)
+### Lakehouse (9 tools)
 | Tool | Description |
 |------|-------------|
 | `lakehouse_list` | List all lakehouses in a workspace |
 | `lakehouse_get` | Get lakehouse details (SQL endpoint, OneLake paths) |
-| `lakehouse_create` | Create a new lakehouse (LRO) |
+| `lakehouse_create` | Create a new lakehouse (LRO, schemas enabled by default) |
 | `lakehouse_update` | Update lakehouse name or description |
 | `lakehouse_delete` | Delete a lakehouse |
 | `lakehouse_list_tables` | List all tables in a lakehouse |
 | `lakehouse_load_table` | Load data into a table from OneLake (LRO) |
+| `lakehouse_create_shortcut` | Create a OneLake shortcut (file, folder, table, or schema level) with support for multiple target types |
 | `lakehouse_get_sql_endpoint` | Get SQL endpoint details |
 
 ### Warehouse (7 tools)
@@ -137,7 +255,7 @@ npm run inspect      # Launch MCP Inspector
 | `notebook_update` | Update notebook name or description |
 | `notebook_delete` | Delete a notebook |
 | `notebook_get_definition` | Get notebook content (decoded from base64) |
-| `notebook_update_definition` | Update notebook content |
+| `notebook_update_definition` | Update notebook content (supports file path reference) |
 | `notebook_run` | Run a notebook on demand |
 | `notebook_get_run_status` | Get notebook run status |
 | `notebook_cancel_run` | Cancel a running notebook |
@@ -164,16 +282,16 @@ npm run inspect      # Launch MCP Inspector
 |------|-------------|
 | `semantic_model_list` | List all semantic models |
 | `semantic_model_get` | Get semantic model details |
-| `semantic_model_create` | Create a semantic model with a BIM/JSON definition (LRO) |
-| `semantic_model_create_tmdl` | Create a semantic model with a TMDL definition (LRO) |
+| `semantic_model_create` | Create a semantic model with a BIM/JSON definition (LRO, supports file path reference) |
+| `semantic_model_create_tmdl` | Create a semantic model with a TMDL definition (LRO, supports directory path reference) |
 | `semantic_model_update` | Update semantic model name or description |
 | `semantic_model_delete` | Delete a semantic model |
 | `semantic_model_refresh` | Trigger a model refresh (Power BI API) |
 | `semantic_model_execute_dax` | Execute a DAX query (Power BI API) |
 | `semantic_model_get_definition` | Get model definition in TMSL/BIM JSON format (LRO) |
 | `semantic_model_get_tmdl` | Get model definition in TMDL format (LRO) |
-| `semantic_model_update_definition` | Update model definition from TMSL/BIM JSON (LRO) |
-| `semantic_model_update_tmdl` | Update model definition from TMDL files (LRO) |
+| `semantic_model_update_definition` | Update model definition from TMSL/BIM JSON (LRO, supports file path reference) |
+| `semantic_model_update_tmdl` | Update model definition from TMDL files (LRO, supports directory path reference) |
 
 ### Report (10 tools)
 | Tool | Description |
@@ -187,7 +305,7 @@ npm run inspect      # Launch MCP Inspector
 | `report_export` | Export report to file format (Power BI API) |
 | `report_get_export_status` | Check report export status |
 | `report_get_definition` | Get report definition in PBIR or PBIR-Legacy format (LRO) |
-| `report_update_definition` | Update report definition from parts (LRO) |
+| `report_update_definition` | Update report definition from parts (LRO, supports directory path reference) |
 
 ### Dataflow Gen2 (7 tools)
 | Tool | Description |
@@ -220,7 +338,7 @@ npm run inspect      # Launch MCP Inspector
 | `eventstream_update` | Update eventstream name or description |
 | `eventstream_delete` | Delete an eventstream |
 | `eventstream_get_definition` | Get eventstream definition (decoded) |
-| `eventstream_update_definition` | Update eventstream definition |
+| `eventstream_update_definition` | Update eventstream definition (supports file path reference) |
 
 ### Reflex / Activator (6 tools)
 | Tool | Description |

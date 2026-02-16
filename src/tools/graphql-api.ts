@@ -6,8 +6,9 @@ import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { decodeBase64 } from "../utils/base64.js";
+import { WorkspaceGuard } from "../core/workspace-guard.js";
 
-export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricClient, powerBIClient: PowerBIClient) {
+export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricClient, powerBIClient: PowerBIClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "graphql_api_list",
     "List all GraphQL API items in a workspace",
@@ -49,6 +50,7 @@ export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricC
     },
     async ({ workspaceId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = { displayName };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/graphQLApis`, body);
@@ -75,6 +77,7 @@ export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricC
     },
     async ({ workspaceId, graphqlApiId, displayName, description }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
@@ -95,6 +98,7 @@ export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricC
     },
     async ({ workspaceId, graphqlApiId }) => {
       try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         await fabricClient.delete(`/workspaces/${workspaceId}/graphQLApis/${graphqlApiId}`);
         return { content: [{ type: "text", text: `GraphQL API ${graphqlApiId} deleted successfully` }] };
       } catch (error) {
