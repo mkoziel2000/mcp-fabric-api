@@ -36,7 +36,7 @@ export interface CreateServerOptions {
 export function createServer(options?: CreateServerOptions): McpServer {
   const server = new McpServer({
     name: "mcp-fabric-api",
-    version: "2.1.0",
+    version: "2.1.1",
   });
 
   const tokenManager = options?.tokenManager ?? new TokenManager();
