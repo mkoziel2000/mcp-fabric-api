@@ -7,8 +7,8 @@ import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { encodeBase64, decodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
-import { resolveFilesOrDirectory } from "../utils/file-reader.js";
-import type { FileEntry } from "../utils/file-reader.js";
+import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
+import type { FileEntry } from "../utils/file-utils.js";
 
 export function registerReportTools(server: McpServer, fabricClient: FabricClient, powerBIClient: PowerBIClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
@@ -179,40 +179,38 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
 
   server.tool(
     "report_get_definition",
-    "Get the full definition of a report (PBIR or PBIR-Legacy format, depending on how the report is stored). Returns all decoded definition parts including report.json, pages, visuals, etc.",
+    "Get the full definition of a report (PBIR or PBIR-Legacy format). Writes all definition files (report.json, pages, visuals, etc.) to the specified output directory and returns the list of files written.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       reportId: z.string().describe("The report ID"),
+      outputDirectoryPath: z.string().describe("Directory path where report definition files will be written"),
     },
-    async ({ workspaceId, reportId }) => {
+    async ({ workspaceId, reportId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
           `/workspaces/${workspaceId}/reports/${reportId}/getDefinition`
         );
+        type DefPart = { path: string; payload: string; payloadType: string };
+        let parts: DefPart[] | undefined;
         if (response.lro) {
           await pollOperation(fabricClient, response.lro.operationId);
           const result = await getOperationResult<Record<string, unknown>>(fabricClient, response.lro.operationId);
           if (result?.definition) {
-            const definition = result.definition as { parts: Array<{ path: string; payload: string; payloadType: string }> };
-            const decoded = definition.parts.map((part) => ({
-              path: part.path,
-              payload: part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload,
-              payloadType: part.payloadType,
-            }));
-            return { content: [{ type: "text", text: JSON.stringify(decoded, null, 2) }] };
+            parts = (result.definition as { parts: DefPart[] }).parts;
           }
         }
-        const data = response.data;
-        if (data?.definition) {
-          const definition = data.definition as { parts: Array<{ path: string; payload: string; payloadType: string }> };
-          const decoded = definition.parts.map((part) => ({
-            path: part.path,
-            payload: part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload,
-            payloadType: part.payloadType,
-          }));
-          return { content: [{ type: "text", text: JSON.stringify(decoded, null, 2) }] };
+        if (!parts && response.data?.definition) {
+          parts = (response.data.definition as { parts: DefPart[] }).parts;
         }
-        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+        if (!parts) {
+          return { content: [{ type: "text", text: "No definition returned from Fabric API" }], isError: true };
+        }
+        const files = parts.map((part) => ({
+          path: part.path,
+          content: part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload,
+        }));
+        const written = await writeFilesToDirectory(outputDirectoryPath, files);
+        return { content: [{ type: "text", text: `Report definition written to: ${outputDirectoryPath}\nFiles:\n${written.map((f) => `  ${f}`).join("\n")}` }] };
       } catch (error) {
         return formatToolError(error);
       }

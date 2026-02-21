@@ -1,6 +1,6 @@
 {
   "name": "@einlogic/mcp-fabric-api",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "description": "MCP server for Microsoft Fabric REST APIs — enables data engineers and data analysts to use AI assistants beyond Copilot to build and manage Fabric components",
   "type": "module",
   "main": "build/index.js",
@@ -29,6 +29,34 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0"
   },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "microsoft-fabric",
+    "fabric",
+    "power-bi",
+    "powerbi",
+    "semantic-model",
+    "lakehouse",
+    "warehouse",
+    "pipeline",
+    "dataflow",
+    "notebook",
+    "eventhouse",
+    "eventstream",
+    "graphql",
+    "ai",
+    "claude",
+    "llm",
+    "data-engineering",
+    "data-analytics",
+    "azure",
+    "onelake",
+    "tmdl",
+    "dax",
+    "kql"
+  ],
   "license": "AGPL-3.0",
   "engines": {
     "node": ">=18.0.0"

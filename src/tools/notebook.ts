@@ -7,7 +7,7 @@ import { pollOperation, getOperationResult } from "../core/lro.js";
 import { runOnDemandJob, getJobInstance, cancelJobInstance } from "../core/job-scheduler.js";
 import { decodeBase64, encodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
-import { resolveContentOrFile } from "../utils/file-reader.js";
+import { resolveContentOrFile } from "../utils/file-utils.js";
 
 export function registerNotebookTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(

@@ -6,6 +6,7 @@ import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { decodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
+import { writeFilesToDirectory } from "../utils/file-utils.js";
 
 export function registerReflexTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
@@ -103,30 +104,38 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
 
   server.tool(
     "reflex_get_definition",
-    "Get the definition of a Reflex (Activator) item (long-running, returns decoded content)",
+    "Get the definition of a Reflex (Activator) item (long-running). Writes definition files to the specified output directory and returns the list of files written.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       reflexId: z.string().describe("The reflex/activator ID"),
+      outputDirectoryPath: z.string().describe("Directory path where Reflex definition files will be written"),
     },
-    async ({ workspaceId, reflexId }) => {
+    async ({ workspaceId, reflexId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
           `/workspaces/${workspaceId}/items/${reflexId}/getDefinition`
         );
+        type DefPart = { path: string; payload: string; payloadType: string };
+        let parts: DefPart[] | undefined;
         if (response.lro) {
           await pollOperation(fabricClient, response.lro.operationId);
           const result = await getOperationResult<Record<string, unknown>>(fabricClient, response.lro.operationId);
           if (result?.definition) {
-            const definition = result.definition as { parts: Array<{ path: string; payload: string; payloadType: string }> };
-            const decoded = definition.parts.map((part) => ({
-              path: part.path,
-              payload: part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload,
-              payloadType: part.payloadType,
-            }));
-            return { content: [{ type: "text", text: JSON.stringify(decoded, null, 2) }] };
+            parts = (result.definition as { parts: DefPart[] }).parts;
           }
         }
-        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+        if (!parts && response.data?.definition) {
+          parts = (response.data.definition as { parts: DefPart[] }).parts;
+        }
+        if (!parts) {
+          return { content: [{ type: "text", text: "No definition returned from Fabric API" }], isError: true };
+        }
+        const files = parts.map((part) => ({
+          path: part.path,
+          content: part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload,
+        }));
+        const written = await writeFilesToDirectory(outputDirectoryPath, files);
+        return { content: [{ type: "text", text: `Reflex definition written to: ${outputDirectoryPath}\nFiles:\n${written.map((f) => `  ${f}`).join("\n")}` }] };
       } catch (error) {
         return formatToolError(error);
       }

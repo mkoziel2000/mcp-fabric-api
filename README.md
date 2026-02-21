@@ -1,6 +1,6 @@
 # mcp-fabric-api
 
-MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. Built for data engineers and data analysts who want to use AI assistants beyond Copilot — such as Claude, Claude Code, or any MCP-compatible client — to build and manage their Fabric components. Covers workspaces, lakehouses, warehouses, notebooks, pipelines, semantic models, reports, dataflows, eventhouses, eventstreams, reflexes, GraphQL APIs, and SQL endpoints.
+MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. Built for data engineers and data analysts who want to use AI assistants beyond Copilot — such as Claude, Claude Code, or any MCP-compatible client — to build and manage their Fabric components. Covers workspaces, lakehouses, warehouses, notebooks, pipelines, semantic models, reports, dataflows, eventhouses, eventstreams, reflexes, GraphQL APIs, SQL endpoints, and variable libraries.
 
 > **Safe by default:** This server blocks all destructive operations (create, update, delete) until you explicitly configure the `WRITABLE_WORKSPACES` environment variable. Read operations always work. Set `WRITABLE_WORKSPACES="*"` to allow writes to all workspaces, or use patterns to limit access. See [Workspace Safety Guard](#workspace-safety-guard) for details.
 
@@ -99,7 +99,7 @@ WRITABLE_WORKSPACES=*-Dev,*-Test,Sandbox*
 - `Sandbox*` matches "Sandbox-123", "Sandbox-Mike"
 - `Exact-Name` matches only "Exact-Name" (case-insensitive)
 
-**Guarded tools (47 total)** — every tool that creates, updates, or deletes workspace items:
+**Guarded tools (51 total)** — every tool that creates, updates, or deletes workspace items:
 
 | Domain | Guarded tools |
 |--------|--------------|
@@ -108,15 +108,16 @@ WRITABLE_WORKSPACES=*-Dev,*-Test,Sandbox*
 | Warehouse | `warehouse_create`, `warehouse_update`, `warehouse_delete` |
 | Notebook | `notebook_create`, `notebook_update`, `notebook_delete`, `notebook_update_definition` |
 | Pipeline | `pipeline_create`, `pipeline_update`, `pipeline_delete`, `pipeline_create_schedule`, `pipeline_update_schedule`, `pipeline_delete_schedule` |
-| Semantic Model | `semantic_model_create`, `semantic_model_create_tmdl`, `semantic_model_update`, `semantic_model_delete`, `semantic_model_update_definition`, `semantic_model_update_tmdl` |
+| Semantic Model | `semantic_model_create_bim`, `semantic_model_create_tmdl`, `semantic_model_update_details`, `semantic_model_delete`, `semantic_model_update_bim`, `semantic_model_update_tmdl` |
 | Report | `report_create`, `report_update`, `report_delete`, `report_clone`, `report_update_definition` |
 | Dataflow | `dataflow_create`, `dataflow_update`, `dataflow_delete` |
 | Eventhouse | `eventhouse_create`, `eventhouse_update`, `eventhouse_delete` |
 | Eventstream | `eventstream_create`, `eventstream_update`, `eventstream_delete`, `eventstream_update_definition` |
 | Reflex | `reflex_create`, `reflex_update`, `reflex_delete` |
 | GraphQL API | `graphql_api_create`, `graphql_api_update`, `graphql_api_delete` |
+| Variable Library | `variable_library_create`, `variable_library_update`, `variable_library_delete`, `variable_library_update_definition` |
 
-**Not guarded:** Read operations (list, get, get_definition, get_status), query execution (DAX, KQL, SQL, GraphQL), run/refresh/cancel operations, and export operations.
+**Not guarded:** Read operations (list, get, get_definition, get_bim, get_tmdl), query execution (DAX, KQL, SQL, GraphQL), run/refresh/cancel operations, and export operations.
 
 **Claude Desktop config with guard:**
 ```json
@@ -148,35 +149,35 @@ WRITABLE_WORKSPACES is not configured. Destructive actions are blocked by defaul
 Workspace "Production-Analytics" is not in the writable workspaces list. Allowed patterns: *-Dev, *-Test, Sandbox*
 ```
 
-### File Path References
+### File-Based I/O
 
-Some tools accept large payloads (notebook code, model.bim JSON, TMDL files, report definitions) that may exceed message size limits. Instead of passing content inline, you can write payloads to local files and pass file paths.
+To avoid large payloads overwhelming MCP clients, definition tools use file paths instead of inline content. The server reads files from disk when sending definitions to Fabric, and writes files to disk when retrieving definitions from Fabric.
 
-**Single-content tools** — use `contentFilePath` or `definitionFilePath` instead of inline content:
+**Input tools** — the server reads definition files from the specified path and uploads to Fabric:
 
-| Tool | File path parameter |
-|------|-------------------|
-| `notebook_update_definition` | `contentFilePath` |
-| `semantic_model_create` | `definitionFilePath` |
-| `semantic_model_update_definition` | `definitionFilePath` |
-| `eventstream_update_definition` | `contentFilePath` |
+| Tool | Parameter | Description |
+|------|-----------|-------------|
+| `semantic_model_create_bim` | `definitionFilePath` | Path to model.bim JSON file |
+| `semantic_model_update_bim` | `definitionFilePath` | Path to model.bim JSON file |
+| `semantic_model_create_tmdl` | `filesDirectoryPath` | Directory of `.tmdl` and `.pbism` files |
+| `semantic_model_update_tmdl` | `filesDirectoryPath` | Directory of `.tmdl` and `.pbism` files |
+| `notebook_update_definition` | `contentFilePath` | Path to notebook content file (or inline `content`) |
+| `eventstream_update_definition` | `contentFilePath` | Path to eventstream definition (or inline `content`) |
+| `report_update_definition` | `partsDirectoryPath` | Directory of report definition files (or inline `parts`) |
+| `variable_library_create` | `definitionDirectoryPath` | Directory of `.json` and `.platform` files |
+| `variable_library_update_definition` | `definitionDirectoryPath` | Directory of `.json` and `.platform` files |
 
-**Multi-file tools** — use `filesDirectoryPath` or `partsDirectoryPath` instead of inline file arrays:
+**Output tools** — the server retrieves definitions from Fabric and writes them to disk:
 
-| Tool | Directory path parameter | Extension filter |
-|------|------------------------|-----------------|
-| `semantic_model_create_tmdl` | `filesDirectoryPath` | `.tmdl`, `.pbism` |
-| `semantic_model_update_tmdl` | `filesDirectoryPath` | `.tmdl`, `.pbism` |
-| `report_update_definition` | `partsDirectoryPath` | all files |
-
-**Example — inline vs file path:**
-```json
-// Inline (may hit size limits)
-{ "content": "# Notebook code\nprint('hello')" }
-
-// File path reference
-{ "contentFilePath": "/tmp/notebook-content.py" }
-```
+| Tool | Parameter | What gets written |
+|------|-----------|-------------------|
+| `semantic_model_get_bim` | `outputFilePath` | Single `model.bim` JSON file |
+| `semantic_model_get_tmdl` | `outputDirectoryPath` | TMDL files preserving folder structure |
+| `report_get_definition` | `outputDirectoryPath` | Report definition files (report.json, pages, visuals) |
+| `eventstream_get_definition` | `outputDirectoryPath` | Eventstream definition files |
+| `graphql_api_get_definition` | `outputDirectoryPath` | GraphQL schema definition files |
+| `reflex_get_definition` | `outputDirectoryPath` | Reflex definition files |
+| `variable_library_get_definition` | `outputDirectoryPath` | Variable library files (variables.json, valueSets/) |
 
 **TMDL directory structure example:**
 ```
@@ -202,7 +203,7 @@ npm run dev          # Watch mode
 npm run inspect      # Launch MCP Inspector
 ```
 
-## Tools (98 total)
+## Tools (116 total)
 
 ### Auth (4 tools)
 | Tool | Description |
@@ -281,17 +282,17 @@ npm run inspect      # Launch MCP Inspector
 | Tool | Description |
 |------|-------------|
 | `semantic_model_list` | List all semantic models |
-| `semantic_model_get` | Get semantic model details |
-| `semantic_model_create` | Create a semantic model with a BIM/JSON definition (LRO, supports file path reference) |
-| `semantic_model_create_tmdl` | Create a semantic model with a TMDL definition (LRO, supports directory path reference) |
-| `semantic_model_update` | Update semantic model name or description |
+| `semantic_model_get_details` | Get semantic model metadata (name, ID, description) — does not return the definition |
+| `semantic_model_create_bim` | Create a semantic model from a BIM/JSON file (LRO). Reads `model.bim` from `definitionFilePath` |
+| `semantic_model_create_tmdl` | Create a semantic model from TMDL files (LRO). Reads `.tmdl`/`.pbism` from `filesDirectoryPath` |
+| `semantic_model_update_details` | Update semantic model name or description — does not modify the definition |
 | `semantic_model_delete` | Delete a semantic model |
 | `semantic_model_refresh` | Trigger a model refresh (Power BI API) |
 | `semantic_model_execute_dax` | Execute a DAX query (Power BI API) |
-| `semantic_model_get_definition` | Get model definition in TMSL/BIM JSON format (LRO) |
-| `semantic_model_get_tmdl` | Get model definition in TMDL format (LRO) |
-| `semantic_model_update_definition` | Update model definition from TMSL/BIM JSON (LRO, supports file path reference) |
-| `semantic_model_update_tmdl` | Update model definition from TMDL files (LRO, supports directory path reference) |
+| `semantic_model_get_bim` | Get definition in BIM/JSON format (LRO). Writes `model.bim` to `outputFilePath` |
+| `semantic_model_get_tmdl` | Get definition in TMDL format (LRO). Writes TMDL files to `outputDirectoryPath` |
+| `semantic_model_update_bim` | Update definition from BIM/JSON file (LRO). Reads `model.bim` from `definitionFilePath` |
+| `semantic_model_update_tmdl` | Update definition from TMDL files (LRO). Reads `.tmdl`/`.pbism` from `filesDirectoryPath` |
 
 ### Report (10 tools)
 | Tool | Description |
@@ -304,8 +305,8 @@ npm run inspect      # Launch MCP Inspector
 | `report_clone` | Clone a report (Power BI API) |
 | `report_export` | Export report to file format (Power BI API) |
 | `report_get_export_status` | Check report export status |
-| `report_get_definition` | Get report definition in PBIR or PBIR-Legacy format (LRO) |
-| `report_update_definition` | Update report definition from parts (LRO, supports directory path reference) |
+| `report_get_definition` | Get report definition (LRO). Writes files to `outputDirectoryPath` |
+| `report_update_definition` | Update report definition from parts or directory (LRO) |
 
 ### Dataflow Gen2 (7 tools)
 | Tool | Description |
@@ -337,7 +338,7 @@ npm run inspect      # Launch MCP Inspector
 | `eventstream_create` | Create a new eventstream (LRO) |
 | `eventstream_update` | Update eventstream name or description |
 | `eventstream_delete` | Delete an eventstream |
-| `eventstream_get_definition` | Get eventstream definition (decoded) |
+| `eventstream_get_definition` | Get eventstream definition (LRO). Writes files to `outputDirectoryPath` |
 | `eventstream_update_definition` | Update eventstream definition (supports file path reference) |
 
 ### Reflex / Activator (6 tools)
@@ -348,7 +349,7 @@ npm run inspect      # Launch MCP Inspector
 | `reflex_create` | Create a new reflex |
 | `reflex_update` | Update reflex name or description |
 | `reflex_delete` | Delete a reflex |
-| `reflex_get_definition` | Get reflex definition (decoded) |
+| `reflex_get_definition` | Get reflex definition (LRO). Writes files to `outputDirectoryPath` |
 
 ### GraphQL API (7 tools)
 | Tool | Description |
@@ -358,7 +359,7 @@ npm run inspect      # Launch MCP Inspector
 | `graphql_api_create` | Create a new GraphQL API |
 | `graphql_api_update` | Update GraphQL API name or description |
 | `graphql_api_delete` | Delete a GraphQL API |
-| `graphql_api_get_definition` | Get GraphQL schema definition |
+| `graphql_api_get_definition` | Get GraphQL schema definition (LRO). Writes files to `outputDirectoryPath` |
 | `graphql_api_execute_query` | Execute a GraphQL query |
 
 ### SQL Endpoint (4 tools)
@@ -368,6 +369,17 @@ npm run inspect      # Launch MCP Inspector
 | `sql_endpoint_get` | Get SQL endpoint details |
 | `sql_endpoint_get_connection_string` | Get TDS connection string |
 | `sql_endpoint_execute_query` | Execute a T-SQL query against a SQL endpoint |
+
+### Variable Library (7 tools)
+| Tool | Description |
+|------|-------------|
+| `variable_library_list` | List all variable libraries in a workspace |
+| `variable_library_get` | Get variable library details including active value set name |
+| `variable_library_create` | Create a variable library, optionally with definition files from `definitionDirectoryPath` (LRO) |
+| `variable_library_update` | Update name, description, or active value set |
+| `variable_library_delete` | Delete a variable library |
+| `variable_library_get_definition` | Get definition (LRO). Writes files (variables.json, valueSets/) to `outputDirectoryPath` |
+| `variable_library_update_definition` | Update definition from directory of `.json` and `.platform` files (LRO) |
 
 ## License
 

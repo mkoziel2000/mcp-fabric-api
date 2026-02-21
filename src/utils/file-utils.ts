@@ -1,5 +1,5 @@
-import { readFile, readdir, stat } from "fs/promises";
-import { resolve, relative, extname } from "path";
+import { readFile, writeFile, readdir, mkdir, stat } from "fs/promises";
+import { resolve, relative, extname, dirname, join } from "path";
 
 export interface FileEntry {
   path: string;
@@ -53,6 +53,28 @@ export async function readFilesFromDirectory(
   }
 
   return entries;
+}
+
+export async function writeContentToFile(filePath: string, content: string): Promise<string> {
+  const absolutePath = resolve(filePath);
+  await mkdir(dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, content, "utf-8");
+  return absolutePath;
+}
+
+export async function writeFilesToDirectory(
+  dirPath: string,
+  files: FileEntry[]
+): Promise<string[]> {
+  const absolutePath = resolve(dirPath);
+  const written: string[] = [];
+  for (const file of files) {
+    const fullPath = join(absolutePath, file.path);
+    await mkdir(dirname(fullPath), { recursive: true });
+    await writeFile(fullPath, file.content, "utf-8");
+    written.push(file.path);
+  }
+  return written;
 }
 
 export async function resolveContentOrFile(

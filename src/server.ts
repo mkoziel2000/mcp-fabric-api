@@ -15,6 +15,7 @@ import { registerReflexTools } from "./tools/reflex.js";
 import { registerGraphQLApiTools } from "./tools/graphql-api.js";
 import { registerWarehouseTools } from "./tools/warehouse.js";
 import { registerSqlEndpointTools } from "./tools/sql-endpoint.js";
+import { registerVariableLibraryTools } from "./tools/variable-library.js";
 import { registerAuthTools } from "./tools/auth.js";
 import { SqlClient } from "./client/sql-client.js";
 import { KustoClient } from "./client/kusto-client.js";
@@ -27,7 +28,7 @@ export interface CreateServerOptions {
 export function createServer(options?: CreateServerOptions): McpServer {
   const server = new McpServer({
     name: "mcp-fabric-api",
-    version: "1.3.0",
+    version: "2.0.0",
   });
 
   const tokenManager = options?.tokenManager ?? new TokenManager();
@@ -51,6 +52,7 @@ export function createServer(options?: CreateServerOptions): McpServer {
   registerReflexTools(server, fabricClient, workspaceGuard);
   registerGraphQLApiTools(server, fabricClient, powerBIClient, workspaceGuard);
   registerSqlEndpointTools(server, fabricClient, sqlClient);
+  registerVariableLibraryTools(server, fabricClient, workspaceGuard);
   registerAuthTools(server, tokenManager);
 
   return server;
