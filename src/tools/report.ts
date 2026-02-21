@@ -7,8 +7,7 @@ import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { encodeBase64, decodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
-import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
-import type { FileEntry } from "../utils/file-utils.js";
+import { readFilesFromDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 
 export function registerReportTools(server: McpServer, fabricClient: FabricClient, powerBIClient: PowerBIClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
@@ -43,17 +42,28 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "report_create",
-    "Create a new report in a workspace (long-running operation)",
+    "report_create_definition",
+    "Create a new report in a workspace (long-running operation). Reads PBIR definition files from the specified directory.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       displayName: z.string().describe("Display name for the report"),
       description: z.string().optional().describe("Description of the report"),
+      definitionDirectoryPath: z.string().describe("Path to a directory containing report definition files (PBIR format)"),
     },
-    async ({ workspaceId, displayName, description }) => {
+    async ({ workspaceId, displayName, description, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
-        const body: Record<string, unknown> = { displayName };
+        const resolved = await readFilesFromDirectory(definitionDirectoryPath);
+        const body: Record<string, unknown> = {
+          displayName,
+          definition: {
+            parts: resolved.map((part) => ({
+              path: part.path,
+              payload: encodeBase64(part.content),
+              payloadType: "InlineBase64",
+            })),
+          },
+        };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/reports`, body);
         if (response.lro) {
@@ -219,20 +229,16 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
 
   server.tool(
     "report_update_definition",
-    "Update a report's full definition (PBIR or PBIR-Legacy). Accepts an array of definition parts inline or a directory path containing definition files.",
+    "Update a report's full definition (PBIR or PBIR-Legacy). Reads definition files from the specified directory.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       reportId: z.string().describe("The report ID"),
-      parts: z.array(z.object({
-        path: z.string().describe("The definition part path (e.g., 'definition/report.json', 'definition/pages/pages.json', 'definition.pbir')"),
-        content: z.string().describe("The file content as a string"),
-      })).optional().describe("Array of definition parts to upload"),
-      partsDirectoryPath: z.string().optional().describe("Path to a directory containing report definition files (alternative to inline parts)"),
+      definitionDirectoryPath: z.string().describe("Path to a directory containing report definition files (PBIR format)"),
     },
-    async ({ workspaceId, reportId, parts, partsDirectoryPath }) => {
+    async ({ workspaceId, reportId, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
-        const resolved: FileEntry[] = await resolveFilesOrDirectory(parts, partsDirectoryPath);
+        const resolved = await readFilesFromDirectory(definitionDirectoryPath);
         const body = {
           definition: {
             parts: resolved.map((part) => ({
