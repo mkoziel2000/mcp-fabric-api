@@ -1,7 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { FabricClient } from "../client/fabric-client.js";
-import { formatToolError } from "../core/errors.js";
+import { SqlClient } from "../client/sql-client.js";
+import { FabricApiError, formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { encodeBase64, decodeBase64 } from "../utils/base64.js";
@@ -9,7 +10,12 @@ import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 import type { FileEntry } from "../utils/file-utils.js";
 
-export function registerLakehouseTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
+function isSchemaEnabledError(error: unknown): boolean {
+  return error instanceof FabricApiError &&
+    error.errorCode === "UnsupportedOperationForSchemasEnabledLakehouse";
+}
+
+export function registerLakehouseTools(server: McpServer, fabricClient: FabricClient, sqlClient: SqlClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "lakehouse_list",
     "List all lakehouses in a workspace",
@@ -111,7 +117,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
 
   server.tool(
     "lakehouse_list_tables",
-    "List all tables in a lakehouse",
+    "List all tables in a lakehouse. For schema-enabled lakehouses, automatically falls back to querying INFORMATION_SCHEMA via the SQL endpoint.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       lakehouseId: z.string().describe("The lakehouse ID"),
@@ -121,14 +127,49 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
         const tables = await paginateAll(fabricClient, `/workspaces/${workspaceId}/lakehouses/${lakehouseId}/tables`, "data");
         return { content: [{ type: "text", text: JSON.stringify(tables, null, 2) }] };
       } catch (error) {
-        return formatToolError(error);
+        if (!isSchemaEnabledError(error)) {
+          return formatToolError(error);
+        }
+        // Fallback: query INFORMATION_SCHEMA via SQL endpoint for schema-enabled lakehouses
+        try {
+          const response = await fabricClient.get<Record<string, unknown>>(
+            `/workspaces/${workspaceId}/lakehouses/${lakehouseId}`
+          );
+          const displayName = response.data.displayName as string | undefined;
+          const properties = response.data.properties as Record<string, unknown> | undefined;
+          const sqlEndpointProps = properties?.sqlEndpointProperties as Record<string, unknown> | undefined;
+          const connectionString = sqlEndpointProps?.connectionString as string | undefined;
+
+          if (!connectionString) {
+            return {
+              content: [{ type: "text", text: "This is a schema-enabled lakehouse and its SQL endpoint is not yet available. The endpoint may still be provisioning. Try again shortly or use sql_endpoint_execute_query once it's ready." }],
+              isError: true,
+            };
+          }
+
+          const server = connectionString.replace(/^.*?:\/\//, "").replace(/,.*$/, "").replace(/;.*$/, "");
+          const dbName = displayName ?? lakehouseId;
+          const result = await sqlClient.executeQuery(
+            server,
+            dbName,
+            "SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA, TABLE_NAME"
+          );
+          return {
+            content: [{
+              type: "text",
+              text: `Schema-enabled lakehouse — tables retrieved via SQL endpoint:\n${JSON.stringify(result, null, 2)}`,
+            }],
+          };
+        } catch (fallbackError) {
+          return formatToolError(fallbackError);
+        }
       }
     }
   );
 
   server.tool(
     "lakehouse_load_table",
-    "Load data into a lakehouse table from a file path (long-running operation)",
+    "Load data into a lakehouse table from a file path (long-running operation). Not supported for schema-enabled lakehouses — use sql_endpoint_execute_query with COPY INTO or notebooks instead.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       lakehouseId: z.string().describe("The lakehouse ID"),
@@ -158,6 +199,12 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
         }
         return { content: [{ type: "text", text: "Table load initiated successfully" }] };
       } catch (error) {
+        if (isSchemaEnabledError(error)) {
+          return {
+            content: [{ type: "text", text: "The table load API is not supported for schema-enabled lakehouses. Alternatives:\n• Use sql_endpoint_execute_query with a COPY INTO statement to load data via the SQL endpoint.\n• Use a notebook (notebook_run) with Spark to load data.\n• Recreate the lakehouse with enableSchemas=false if schemas are not needed." }],
+            isError: true,
+          };
+        }
         return formatToolError(error);
       }
     }

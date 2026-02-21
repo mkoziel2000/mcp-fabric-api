@@ -48,7 +48,7 @@ export function createServer(options?: CreateServerOptions): McpServer {
 
   // Register all domain tools
   registerWorkspaceTools(server, fabricClient, workspaceGuard);
-  registerLakehouseTools(server, fabricClient, workspaceGuard);
+  registerLakehouseTools(server, fabricClient, sqlClient, workspaceGuard);
   registerWarehouseTools(server, fabricClient, workspaceGuard);
   registerNotebookTools(server, fabricClient, workspaceGuard);
   registerPipelineTools(server, fabricClient, workspaceGuard);
