@@ -9,14 +9,14 @@ import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 import type { FileEntry } from "../utils/file-utils.js";
 
-export function registerReflexTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
+export function registerCopyJobTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
-    "reflex_list",
-    "List all Reflex (Activator) items in a workspace",
+    "copy_job_list",
+    "List all copy jobs in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
     async ({ workspaceId }) => {
       try {
-        const items = await paginateAll(fabricClient, `/workspaces/${workspaceId}/items?type=Reflex`);
+        const items = await paginateAll(fabricClient, `/workspaces/${workspaceId}/items?type=CopyJob`);
         return { content: [{ type: "text", text: JSON.stringify(items, null, 2) }] };
       } catch (error) {
         return formatToolError(error);
@@ -25,15 +25,15 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_get",
-    "Get details of a specific Reflex (Activator) item",
+    "copy_job_get",
+    "Get details of a specific copy job",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      reflexId: z.string().describe("The reflex/activator ID"),
+      copyJobId: z.string().describe("The copy job ID"),
     },
-    async ({ workspaceId, reflexId }) => {
+    async ({ workspaceId, copyJobId }) => {
       try {
-        const response = await fabricClient.get(`/workspaces/${workspaceId}/items/${reflexId}`);
+        const response = await fabricClient.get(`/workspaces/${workspaceId}/items/${copyJobId}`);
         return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
       } catch (error) {
         return formatToolError(error);
@@ -42,17 +42,17 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_create",
-    "Create a new Reflex (Activator) item in a workspace",
+    "copy_job_create",
+    "Create a new copy job in a workspace",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      displayName: z.string().describe("Display name for the reflex"),
-      description: z.string().optional().describe("Description of the reflex"),
+      displayName: z.string().describe("Display name for the copy job"),
+      description: z.string().optional().describe("Description of the copy job"),
     },
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
-        const body: Record<string, unknown> = { displayName, type: "Reflex" };
+        const body: Record<string, unknown> = { displayName, type: "CopyJob" };
         if (description) body.description = description;
         const response = await fabricClient.post(`/workspaces/${workspaceId}/items`, body);
         return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
@@ -63,21 +63,21 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_update",
-    "Update a Reflex (Activator) item's name or description",
+    "copy_job_update",
+    "Update a copy job's name or description",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      reflexId: z.string().describe("The reflex/activator ID"),
+      copyJobId: z.string().describe("The copy job ID"),
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
-    async ({ workspaceId, reflexId, displayName, description }) => {
+    async ({ workspaceId, copyJobId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
-        const response = await fabricClient.patch(`/workspaces/${workspaceId}/items/${reflexId}`, body);
+        const response = await fabricClient.patch(`/workspaces/${workspaceId}/items/${copyJobId}`, body);
         return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
       } catch (error) {
         return formatToolError(error);
@@ -86,17 +86,17 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_delete",
-    "Delete a Reflex (Activator) item",
+    "copy_job_delete",
+    "Delete a copy job",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      reflexId: z.string().describe("The reflex/activator ID"),
+      copyJobId: z.string().describe("The copy job ID"),
     },
-    async ({ workspaceId, reflexId }) => {
+    async ({ workspaceId, copyJobId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
-        await fabricClient.delete(`/workspaces/${workspaceId}/items/${reflexId}`);
-        return { content: [{ type: "text", text: `Reflex ${reflexId} deleted successfully` }] };
+        await fabricClient.delete(`/workspaces/${workspaceId}/items/${copyJobId}`);
+        return { content: [{ type: "text", text: `Copy job ${copyJobId} deleted successfully` }] };
       } catch (error) {
         return formatToolError(error);
       }
@@ -104,17 +104,17 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_get_definition",
-    "Get the definition of a Reflex (Activator) item (long-running). Writes definition files to the specified output directory and returns the list of files written.",
+    "copy_job_get_definition",
+    "Get the definition of a copy job (long-running). Writes definition files to the specified output directory.",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      reflexId: z.string().describe("The reflex/activator ID"),
-      outputDirectoryPath: z.string().describe("Directory path where Reflex definition files will be written"),
+      copyJobId: z.string().describe("The copy job ID"),
+      outputDirectoryPath: z.string().describe("Directory path where definition files will be written"),
     },
-    async ({ workspaceId, reflexId, outputDirectoryPath }) => {
+    async ({ workspaceId, copyJobId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
-          `/workspaces/${workspaceId}/items/${reflexId}/getDefinition`
+          `/workspaces/${workspaceId}/items/${copyJobId}/getDefinition`
         );
         type DefPart = { path: string; payload: string; payloadType: string };
         let parts: DefPart[] | undefined;
@@ -136,7 +136,7 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
           content: part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload,
         }));
         const written = await writeFilesToDirectory(outputDirectoryPath, files);
-        return { content: [{ type: "text", text: `Reflex definition written to: ${outputDirectoryPath}\nFiles:\n${written.map((f) => `  ${f}`).join("\n")}` }] };
+        return { content: [{ type: "text", text: `Copy job definition written to: ${outputDirectoryPath}\nFiles:\n${written.map((f) => `  ${f}`).join("\n")}` }] };
       } catch (error) {
         return formatToolError(error);
       }
@@ -144,18 +144,18 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_update_definition",
-    "Update a Reflex (Activator) item's definition (long-running). Accepts definition parts inline or a directory path.",
+    "copy_job_update_definition",
+    "Update a copy job's definition (long-running). Accepts definition parts inline or a directory path.",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      reflexId: z.string().describe("The reflex/activator ID"),
+      copyJobId: z.string().describe("The copy job ID"),
       parts: z.array(z.object({
         path: z.string().describe("The definition part path"),
         content: z.string().describe("The file content as a string"),
       })).optional().describe("Array of definition parts to upload"),
       partsDirectoryPath: z.string().optional().describe("Path to a directory containing definition files"),
     },
-    async ({ workspaceId, reflexId, parts, partsDirectoryPath }) => {
+    async ({ workspaceId, copyJobId, parts, partsDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const resolved: FileEntry[] = await resolveFilesOrDirectory(parts, partsDirectoryPath);
@@ -169,14 +169,14 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
           },
         };
         const response = await fabricClient.post(
-          `/workspaces/${workspaceId}/items/${reflexId}/updateDefinition`,
+          `/workspaces/${workspaceId}/items/${copyJobId}/updateDefinition`,
           body
         );
         if (response.lro) {
           const state = await pollOperation(fabricClient, response.lro.operationId);
           return { content: [{ type: "text", text: JSON.stringify(state, null, 2) }] };
         }
-        return { content: [{ type: "text", text: "Reflex definition updated successfully" }] };
+        return { content: [{ type: "text", text: "Copy job definition updated successfully" }] };
       } catch (error) {
         return formatToolError(error);
       }

@@ -256,4 +256,64 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       }
     }
   );
+
+  server.tool(
+    "report_rebind",
+    "Rebind a report to a different semantic model/dataset via the Power BI API",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      reportId: z.string().describe("The report ID"),
+      datasetId: z.string().describe("The target semantic model/dataset ID to rebind to"),
+    },
+    async ({ workspaceId, reportId, datasetId }) => {
+      try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        await powerBIClient.post(
+          `/groups/${workspaceId}/reports/${reportId}/Rebind`,
+          { datasetId }
+        );
+        return { content: [{ type: "text", text: `Report ${reportId} rebound to dataset ${datasetId} successfully` }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "report_get_pages",
+    "Get the list of pages in a report via the Power BI API",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      reportId: z.string().describe("The report ID"),
+    },
+    async ({ workspaceId, reportId }) => {
+      try {
+        const response = await powerBIClient.get(
+          `/groups/${workspaceId}/reports/${reportId}/pages`
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "report_get_datasources",
+    "Get the data sources used by a report via the Power BI API",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      reportId: z.string().describe("The report ID"),
+    },
+    async ({ workspaceId, reportId }) => {
+      try {
+        const response = await powerBIClient.get(
+          `/groups/${workspaceId}/reports/${reportId}/datasources`
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
 }

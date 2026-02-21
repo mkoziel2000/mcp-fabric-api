@@ -367,4 +367,62 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       }
     }
   );
+
+  server.tool(
+    "semantic_model_get_refresh_history",
+    "Get the refresh history of a semantic model via the Power BI API",
+    {
+      workspaceId: z.string().describe("The workspace ID (Power BI group ID)"),
+      semanticModelId: z.string().describe("The semantic model/dataset ID"),
+    },
+    async ({ workspaceId, semanticModelId }) => {
+      try {
+        const response = await powerBIClient.get(
+          `/groups/${workspaceId}/datasets/${semanticModelId}/refreshes`
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "semantic_model_take_over",
+    "Take over ownership of a semantic model via the Power BI API",
+    {
+      workspaceId: z.string().describe("The workspace ID (Power BI group ID)"),
+      semanticModelId: z.string().describe("The semantic model/dataset ID"),
+    },
+    async ({ workspaceId, semanticModelId }) => {
+      try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        await powerBIClient.post(
+          `/groups/${workspaceId}/datasets/${semanticModelId}/Default.TakeOver`
+        );
+        return { content: [{ type: "text", text: `Successfully took over ownership of semantic model ${semanticModelId}` }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "semantic_model_get_datasources",
+    "Get the data sources of a semantic model via the Power BI API",
+    {
+      workspaceId: z.string().describe("The workspace ID (Power BI group ID)"),
+      semanticModelId: z.string().describe("The semantic model/dataset ID"),
+    },
+    async ({ workspaceId, semanticModelId }) => {
+      try {
+        const response = await powerBIClient.get(
+          `/groups/${workspaceId}/datasets/${semanticModelId}/datasources`
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
 }

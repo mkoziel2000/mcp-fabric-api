@@ -17,6 +17,14 @@ import { registerWarehouseTools } from "./tools/warehouse.js";
 import { registerSqlEndpointTools } from "./tools/sql-endpoint.js";
 import { registerVariableLibraryTools } from "./tools/variable-library.js";
 import { registerAuthTools } from "./tools/auth.js";
+import { registerGitIntegrationTools } from "./tools/git-integration.js";
+import { registerDeploymentPipelineTools } from "./tools/deployment-pipeline.js";
+import { registerMirroredDatabaseTools } from "./tools/mirrored-database.js";
+import { registerKqlDatabaseTools } from "./tools/kql-database.js";
+import { registerMlModelTools } from "./tools/ml-model.js";
+import { registerMlExperimentTools } from "./tools/ml-experiment.js";
+import { registerCopyJobTools } from "./tools/copy-job.js";
+import { registerExternalDataShareTools } from "./tools/external-data-share.js";
 import { SqlClient } from "./client/sql-client.js";
 import { KustoClient } from "./client/kusto-client.js";
 import { WorkspaceGuard } from "./core/workspace-guard.js";
@@ -28,7 +36,7 @@ export interface CreateServerOptions {
 export function createServer(options?: CreateServerOptions): McpServer {
   const server = new McpServer({
     name: "mcp-fabric-api",
-    version: "2.0.0",
+    version: "2.1.0",
   });
 
   const tokenManager = options?.tokenManager ?? new TokenManager();
@@ -53,6 +61,14 @@ export function createServer(options?: CreateServerOptions): McpServer {
   registerGraphQLApiTools(server, fabricClient, powerBIClient, workspaceGuard);
   registerSqlEndpointTools(server, fabricClient, sqlClient);
   registerVariableLibraryTools(server, fabricClient, workspaceGuard);
+  registerGitIntegrationTools(server, fabricClient, workspaceGuard);
+  registerDeploymentPipelineTools(server, fabricClient, workspaceGuard);
+  registerMirroredDatabaseTools(server, fabricClient, workspaceGuard);
+  registerKqlDatabaseTools(server, fabricClient, workspaceGuard);
+  registerMlModelTools(server, fabricClient, workspaceGuard);
+  registerMlExperimentTools(server, fabricClient, workspaceGuard);
+  registerCopyJobTools(server, fabricClient, workspaceGuard);
+  registerExternalDataShareTools(server, fabricClient, workspaceGuard);
   registerAuthTools(server, tokenManager);
 
   return server;

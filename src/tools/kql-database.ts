@@ -9,14 +9,14 @@ import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 import type { FileEntry } from "../utils/file-utils.js";
 
-export function registerReflexTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
+export function registerKqlDatabaseTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
-    "reflex_list",
-    "List all Reflex (Activator) items in a workspace",
+    "kql_database_list",
+    "List all KQL databases in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
     async ({ workspaceId }) => {
       try {
-        const items = await paginateAll(fabricClient, `/workspaces/${workspaceId}/items?type=Reflex`);
+        const items = await paginateAll(fabricClient, `/workspaces/${workspaceId}/kqlDatabases`);
         return { content: [{ type: "text", text: JSON.stringify(items, null, 2) }] };
       } catch (error) {
         return formatToolError(error);
@@ -25,15 +25,15 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_get",
-    "Get details of a specific Reflex (Activator) item",
+    "kql_database_get",
+    "Get details of a specific KQL database",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      reflexId: z.string().describe("The reflex/activator ID"),
+      kqlDatabaseId: z.string().describe("The KQL database ID"),
     },
-    async ({ workspaceId, reflexId }) => {
+    async ({ workspaceId, kqlDatabaseId }) => {
       try {
-        const response = await fabricClient.get(`/workspaces/${workspaceId}/items/${reflexId}`);
+        const response = await fabricClient.get(`/workspaces/${workspaceId}/kqlDatabases/${kqlDatabaseId}`);
         return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
       } catch (error) {
         return formatToolError(error);
@@ -42,19 +42,29 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_create",
-    "Create a new Reflex (Activator) item in a workspace",
+    "kql_database_create",
+    "Create a new KQL database in a workspace (long-running). Requires a parent eventhouse.",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      displayName: z.string().describe("Display name for the reflex"),
-      description: z.string().optional().describe("Description of the reflex"),
+      displayName: z.string().describe("Display name for the KQL database"),
+      description: z.string().optional().describe("Description of the KQL database"),
+      databaseType: z.enum(["ReadWrite", "ReadOnlyShortcut"]).describe("Database type"),
+      parentEventhouseItemId: z.string().describe("Parent eventhouse item ID"),
     },
-    async ({ workspaceId, displayName, description }) => {
+    async ({ workspaceId, displayName, description, databaseType, parentEventhouseItemId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
-        const body: Record<string, unknown> = { displayName, type: "Reflex" };
+        const body: Record<string, unknown> = {
+          displayName,
+          creationPayload: { databaseType, parentEventhouseItemId },
+        };
         if (description) body.description = description;
-        const response = await fabricClient.post(`/workspaces/${workspaceId}/items`, body);
+        const response = await fabricClient.post(`/workspaces/${workspaceId}/kqlDatabases`, body);
+        if (response.lro) {
+          const state = await pollOperation(fabricClient, response.lro.operationId);
+          const result = await getOperationResult(fabricClient, response.lro.operationId);
+          return { content: [{ type: "text", text: JSON.stringify({ operation: state, item: result ?? response.data }, null, 2) }] };
+        }
         return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
       } catch (error) {
         return formatToolError(error);
@@ -63,21 +73,21 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_update",
-    "Update a Reflex (Activator) item's name or description",
+    "kql_database_update",
+    "Update a KQL database's name or description",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      reflexId: z.string().describe("The reflex/activator ID"),
+      kqlDatabaseId: z.string().describe("The KQL database ID"),
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
-    async ({ workspaceId, reflexId, displayName, description }) => {
+    async ({ workspaceId, kqlDatabaseId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const body: Record<string, unknown> = {};
         if (displayName !== undefined) body.displayName = displayName;
         if (description !== undefined) body.description = description;
-        const response = await fabricClient.patch(`/workspaces/${workspaceId}/items/${reflexId}`, body);
+        const response = await fabricClient.patch(`/workspaces/${workspaceId}/kqlDatabases/${kqlDatabaseId}`, body);
         return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
       } catch (error) {
         return formatToolError(error);
@@ -86,17 +96,17 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_delete",
-    "Delete a Reflex (Activator) item",
+    "kql_database_delete",
+    "Delete a KQL database",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      reflexId: z.string().describe("The reflex/activator ID"),
+      kqlDatabaseId: z.string().describe("The KQL database ID"),
     },
-    async ({ workspaceId, reflexId }) => {
+    async ({ workspaceId, kqlDatabaseId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
-        await fabricClient.delete(`/workspaces/${workspaceId}/items/${reflexId}`);
-        return { content: [{ type: "text", text: `Reflex ${reflexId} deleted successfully` }] };
+        await fabricClient.delete(`/workspaces/${workspaceId}/kqlDatabases/${kqlDatabaseId}`);
+        return { content: [{ type: "text", text: `KQL database ${kqlDatabaseId} deleted successfully` }] };
       } catch (error) {
         return formatToolError(error);
       }
@@ -104,17 +114,17 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_get_definition",
-    "Get the definition of a Reflex (Activator) item (long-running). Writes definition files to the specified output directory and returns the list of files written.",
+    "kql_database_get_definition",
+    "Get the definition of a KQL database (long-running). Writes definition files to the specified output directory.",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      reflexId: z.string().describe("The reflex/activator ID"),
-      outputDirectoryPath: z.string().describe("Directory path where Reflex definition files will be written"),
+      kqlDatabaseId: z.string().describe("The KQL database ID"),
+      outputDirectoryPath: z.string().describe("Directory path where definition files will be written"),
     },
-    async ({ workspaceId, reflexId, outputDirectoryPath }) => {
+    async ({ workspaceId, kqlDatabaseId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
-          `/workspaces/${workspaceId}/items/${reflexId}/getDefinition`
+          `/workspaces/${workspaceId}/kqlDatabases/${kqlDatabaseId}/getDefinition`
         );
         type DefPart = { path: string; payload: string; payloadType: string };
         let parts: DefPart[] | undefined;
@@ -136,7 +146,7 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
           content: part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload,
         }));
         const written = await writeFilesToDirectory(outputDirectoryPath, files);
-        return { content: [{ type: "text", text: `Reflex definition written to: ${outputDirectoryPath}\nFiles:\n${written.map((f) => `  ${f}`).join("\n")}` }] };
+        return { content: [{ type: "text", text: `KQL database definition written to: ${outputDirectoryPath}\nFiles:\n${written.map((f) => `  ${f}`).join("\n")}` }] };
       } catch (error) {
         return formatToolError(error);
       }
@@ -144,18 +154,18 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
   );
 
   server.tool(
-    "reflex_update_definition",
-    "Update a Reflex (Activator) item's definition (long-running). Accepts definition parts inline or a directory path.",
+    "kql_database_update_definition",
+    "Update a KQL database's definition (long-running). Accepts definition parts inline or a directory path.",
     {
       workspaceId: z.string().describe("The workspace ID"),
-      reflexId: z.string().describe("The reflex/activator ID"),
+      kqlDatabaseId: z.string().describe("The KQL database ID"),
       parts: z.array(z.object({
         path: z.string().describe("The definition part path"),
         content: z.string().describe("The file content as a string"),
       })).optional().describe("Array of definition parts to upload"),
       partsDirectoryPath: z.string().optional().describe("Path to a directory containing definition files"),
     },
-    async ({ workspaceId, reflexId, parts, partsDirectoryPath }) => {
+    async ({ workspaceId, kqlDatabaseId, parts, partsDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
         const resolved: FileEntry[] = await resolveFilesOrDirectory(parts, partsDirectoryPath);
@@ -169,14 +179,14 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
           },
         };
         const response = await fabricClient.post(
-          `/workspaces/${workspaceId}/items/${reflexId}/updateDefinition`,
+          `/workspaces/${workspaceId}/kqlDatabases/${kqlDatabaseId}/updateDefinition`,
           body
         );
         if (response.lro) {
           const state = await pollOperation(fabricClient, response.lro.operationId);
           return { content: [{ type: "text", text: JSON.stringify(state, null, 2) }] };
         }
-        return { content: [{ type: "text", text: "Reflex definition updated successfully" }] };
+        return { content: [{ type: "text", text: "KQL database definition updated successfully" }] };
       } catch (error) {
         return formatToolError(error);
       }

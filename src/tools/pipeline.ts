@@ -4,8 +4,11 @@ import { FabricClient } from "../client/fabric-client.js";
 import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
+import { encodeBase64, decodeBase64 } from "../utils/base64.js";
 import { runOnDemandJob, getJobInstance, cancelJobInstance, listJobInstances } from "../core/job-scheduler.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
+import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
+import type { FileEntry } from "../utils/file-utils.js";
 
 export function registerPipelineTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
@@ -280,6 +283,86 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
           `/workspaces/${workspaceId}/items/${pipelineId}/jobSchedules/${scheduleId}`
         );
         return { content: [{ type: "text", text: `Schedule ${scheduleId} deleted successfully` }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "pipeline_get_definition",
+    "Get the definition of a data pipeline (long-running). Writes definition files to the specified output directory.",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      pipelineId: z.string().describe("The pipeline ID"),
+      outputDirectoryPath: z.string().describe("Directory path where definition files will be written"),
+    },
+    async ({ workspaceId, pipelineId, outputDirectoryPath }) => {
+      try {
+        const response = await fabricClient.post<Record<string, unknown>>(
+          `/workspaces/${workspaceId}/dataPipelines/${pipelineId}/getDefinition`
+        );
+        type DefPart = { path: string; payload: string; payloadType: string };
+        let parts: DefPart[] | undefined;
+        if (response.lro) {
+          await pollOperation(fabricClient, response.lro.operationId);
+          const result = await getOperationResult<Record<string, unknown>>(fabricClient, response.lro.operationId);
+          if (result?.definition) {
+            parts = (result.definition as { parts: DefPart[] }).parts;
+          }
+        }
+        if (!parts && response.data?.definition) {
+          parts = (response.data.definition as { parts: DefPart[] }).parts;
+        }
+        if (!parts) {
+          return { content: [{ type: "text", text: "No definition returned from Fabric API" }], isError: true };
+        }
+        const files = parts.map((part) => ({
+          path: part.path,
+          content: part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload,
+        }));
+        const written = await writeFilesToDirectory(outputDirectoryPath, files);
+        return { content: [{ type: "text", text: `Pipeline definition written to: ${outputDirectoryPath}\nFiles:\n${written.map((f) => `  ${f}`).join("\n")}` }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "pipeline_update_definition",
+    "Update a data pipeline's definition (long-running). Accepts definition parts inline or a directory path.",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      pipelineId: z.string().describe("The pipeline ID"),
+      parts: z.array(z.object({
+        path: z.string().describe("The definition part path"),
+        content: z.string().describe("The file content as a string"),
+      })).optional().describe("Array of definition parts to upload"),
+      partsDirectoryPath: z.string().optional().describe("Path to a directory containing definition files"),
+    },
+    async ({ workspaceId, pipelineId, parts, partsDirectoryPath }) => {
+      try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        const resolved: FileEntry[] = await resolveFilesOrDirectory(parts, partsDirectoryPath);
+        const body = {
+          definition: {
+            parts: resolved.map((part) => ({
+              path: part.path,
+              payload: encodeBase64(part.content),
+              payloadType: "InlineBase64",
+            })),
+          },
+        };
+        const response = await fabricClient.post(
+          `/workspaces/${workspaceId}/dataPipelines/${pipelineId}/updateDefinition`,
+          body
+        );
+        if (response.lro) {
+          const state = await pollOperation(fabricClient, response.lro.operationId);
+          return { content: [{ type: "text", text: JSON.stringify(state, null, 2) }] };
+        }
+        return { content: [{ type: "text", text: "Pipeline definition updated successfully" }] };
       } catch (error) {
         return formatToolError(error);
       }
