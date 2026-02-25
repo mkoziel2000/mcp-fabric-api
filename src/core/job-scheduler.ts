@@ -16,6 +16,19 @@ export async function runOnDemandJob(
     `/workspaces/${workspaceId}/items/${itemId}/jobs/instances?jobType=${jobType}`,
     Object.keys(body).length > 0 ? body : undefined
   );
+
+  // 202 Accepted with no body — extract job instance ID from Location header
+  if (response.data === undefined || response.data === null) {
+    const jobInstanceId = response.lro?.location?.match(/instances\/([^/?]+)/)?.[1];
+    return {
+      id: jobInstanceId ?? response.lro?.operationId ?? "unknown",
+      itemId,
+      jobType,
+      invokeType: "OnDemand",
+      status: "NotStarted",
+    };
+  }
+
   return response.data;
 }
 

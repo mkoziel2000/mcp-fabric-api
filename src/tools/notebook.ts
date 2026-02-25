@@ -7,7 +7,7 @@ import { pollOperation, getOperationResult } from "../core/lro.js";
 import { runOnDemandJob, getJobInstance, cancelJobInstance } from "../core/job-scheduler.js";
 import { decodeBase64, encodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
-import { resolveContentOrFile } from "../utils/file-utils.js";
+import { readFilesFromDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 
 export function registerNotebookTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
@@ -110,40 +110,38 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
 
   server.tool(
     "notebook_get_definition",
-    "Get the content/definition of a notebook (long-running, returns decoded content)",
+    "Get the content/definition of a notebook (long-running). Writes definition files to the specified output directory.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       notebookId: z.string().describe("The notebook ID"),
+      outputDirectoryPath: z.string().describe("Directory path where notebook definition files will be written"),
     },
-    async ({ workspaceId, notebookId }) => {
+    async ({ workspaceId, notebookId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
           `/workspaces/${workspaceId}/notebooks/${notebookId}/getDefinition`
         );
+        type DefPart = { path: string; payload: string; payloadType: string };
+        let parts: DefPart[] | undefined;
         if (response.lro) {
           await pollOperation(fabricClient, response.lro.operationId);
           const result = await getOperationResult<Record<string, unknown>>(fabricClient, response.lro.operationId);
           if (result?.definition) {
-            const definition = result.definition as { parts: Array<{ path: string; payload: string; payloadType: string }> };
-            const decoded = definition.parts.map((part) => ({
-              path: part.path,
-              payload: part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload,
-              payloadType: part.payloadType,
-            }));
-            return { content: [{ type: "text", text: JSON.stringify(decoded, null, 2) }] };
+            parts = (result.definition as { parts: DefPart[] }).parts;
           }
         }
-        const data = response.data;
-        if (data?.definition) {
-          const definition = data.definition as { parts: Array<{ path: string; payload: string; payloadType: string }> };
-          const decoded = definition.parts.map((part) => ({
-            path: part.path,
-            payload: part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload,
-            payloadType: part.payloadType,
-          }));
-          return { content: [{ type: "text", text: JSON.stringify(decoded, null, 2) }] };
+        if (!parts && response.data?.definition) {
+          parts = (response.data.definition as { parts: DefPart[] }).parts;
         }
-        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+        if (!parts) {
+          return { content: [{ type: "text", text: "No definition returned from Fabric API" }], isError: true };
+        }
+        const files = parts.map((part) => ({
+          path: part.path,
+          content: part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload,
+        }));
+        const written = await writeFilesToDirectory(outputDirectoryPath, files);
+        return { content: [{ type: "text", text: `Notebook definition written to: ${outputDirectoryPath}\nFiles:\n${written.map((f) => `  ${f}`).join("\n")}` }] };
       } catch (error) {
         return formatToolError(error);
       }
@@ -152,27 +150,23 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
 
   server.tool(
     "notebook_update_definition",
-    "Update the content/definition of a notebook (long-running). Accepts raw content inline or a file path reference.",
+    "Update the content/definition of a notebook (long-running). Reads definition files from the specified directory.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       notebookId: z.string().describe("The notebook ID"),
-      content: z.string().optional().describe("The notebook content (will be base64 encoded)"),
-      contentFilePath: z.string().optional().describe("Path to a file containing the notebook content (alternative to inline content)"),
-      path: z.string().optional().describe("The definition part path (default: notebook-content.py)"),
+      definitionDirectoryPath: z.string().describe("Path to a directory containing notebook definition files"),
     },
-    async ({ workspaceId, notebookId, content, contentFilePath, path }) => {
+    async ({ workspaceId, notebookId, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
-        const resolved = await resolveContentOrFile(content, contentFilePath, "content");
+        const resolved = await readFilesFromDirectory(definitionDirectoryPath);
         const body = {
           definition: {
-            parts: [
-              {
-                path: path ?? "notebook-content.py",
-                payload: encodeBase64(resolved),
-                payloadType: "InlineBase64",
-              },
-            ],
+            parts: resolved.map((part) => ({
+              path: part.path,
+              payload: encodeBase64(part.content),
+              payloadType: "InlineBase64",
+            })),
           },
         };
         const response = await fabricClient.post(

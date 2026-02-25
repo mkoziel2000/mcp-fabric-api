@@ -1,6 +1,6 @@
 # mcp-fabric-api
 
-MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. Built for data engineers and data analysts who want to use AI assistants beyond Copilot — such as Claude, Claude Code, or any MCP-compatible client — to build and manage their Fabric components. Covers workspaces, lakehouses, warehouses, notebooks, pipelines, semantic models, reports, dataflows, eventhouses, eventstreams, reflexes, GraphQL APIs, SQL endpoints, and variable libraries.
+MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. Built for data engineers and data analysts who want to use AI assistants beyond Copilot — such as Claude, Claude Code, or any MCP-compatible client — to build and manage their Fabric components. Covers workspaces, lakehouses, warehouses, notebooks, pipelines, semantic models, reports, dataflows, eventhouses, eventstreams, reflexes, GraphQL APIs, SQL endpoints, variable libraries, git integration, deployment pipelines, mirrored databases, KQL databases, ML models, ML experiments, copy jobs, and external data shares.
 
 > **Safe by default:** This server blocks all destructive operations (create, update, delete) until you explicitly configure the `WRITABLE_WORKSPACES` environment variable. Read operations always work. Set `WRITABLE_WORKSPACES="*"` to allow writes to all workspaces, or use patterns to limit access. See [Workspace Safety Guard](#workspace-safety-guard) for details.
 
@@ -99,25 +99,33 @@ WRITABLE_WORKSPACES=*-Dev,*-Test,Sandbox*
 - `Sandbox*` matches "Sandbox-123", "Sandbox-Mike"
 - `Exact-Name` matches only "Exact-Name" (case-insensitive)
 
-**Guarded tools (51 total)** — every tool that creates, updates, or deletes workspace items:
+**Guarded tools (89 total)** — every tool that creates, updates, or deletes workspace items:
 
 | Domain | Guarded tools |
 |--------|--------------|
 | Workspace | `workspace_update`, `workspace_delete` |
-| Lakehouse | `lakehouse_create`, `lakehouse_update`, `lakehouse_delete`, `lakehouse_load_table`, `lakehouse_create_shortcut` |
-| Warehouse | `warehouse_create`, `warehouse_update`, `warehouse_delete` |
+| Lakehouse | `lakehouse_create`, `lakehouse_update`, `lakehouse_delete`, `lakehouse_load_table`, `lakehouse_create_shortcut`, `lakehouse_update_definition`, `lakehouse_delete_shortcut` |
+| Warehouse | `warehouse_create`, `warehouse_update`, `warehouse_delete`, `warehouse_update_definition` |
 | Notebook | `notebook_create`, `notebook_update`, `notebook_delete`, `notebook_update_definition` |
-| Pipeline | `pipeline_create`, `pipeline_update`, `pipeline_delete`, `pipeline_create_schedule`, `pipeline_update_schedule`, `pipeline_delete_schedule` |
-| Semantic Model | `semantic_model_create_bim`, `semantic_model_create_tmdl`, `semantic_model_update_details`, `semantic_model_delete`, `semantic_model_update_bim`, `semantic_model_update_tmdl` |
-| Report | `report_create`, `report_update`, `report_delete`, `report_clone`, `report_update_definition` |
+| Pipeline | `pipeline_create`, `pipeline_update`, `pipeline_delete`, `pipeline_create_schedule`, `pipeline_update_schedule`, `pipeline_delete_schedule`, `pipeline_update_definition` |
+| Semantic Model | `semantic_model_create_bim`, `semantic_model_create_tmdl`, `semantic_model_update_details`, `semantic_model_delete`, `semantic_model_update_bim`, `semantic_model_update_tmdl`, `semantic_model_take_over` |
+| Report | `report_create_definition`, `report_update`, `report_delete`, `report_clone`, `report_update_definition`, `report_rebind` |
 | Dataflow | `dataflow_create`, `dataflow_update`, `dataflow_delete` |
 | Eventhouse | `eventhouse_create`, `eventhouse_update`, `eventhouse_delete` |
 | Eventstream | `eventstream_create`, `eventstream_update`, `eventstream_delete`, `eventstream_update_definition` |
-| Reflex | `reflex_create`, `reflex_update`, `reflex_delete` |
+| Reflex | `reflex_create`, `reflex_update`, `reflex_delete`, `reflex_update_definition` |
 | GraphQL API | `graphql_api_create`, `graphql_api_update`, `graphql_api_delete` |
 | Variable Library | `variable_library_create`, `variable_library_update`, `variable_library_delete`, `variable_library_update_definition` |
+| Git Integration | `git_connect`, `git_disconnect`, `git_initialize_connection`, `git_commit_to_git`, `git_update_from_git`, `git_update_credentials` |
+| Deployment Pipeline | `deployment_pipeline_assign_workspace`, `deployment_pipeline_unassign_workspace`, `deployment_pipeline_deploy` |
+| Mirrored Database | `mirrored_database_create`, `mirrored_database_update`, `mirrored_database_delete`, `mirrored_database_update_definition`, `mirrored_database_start_mirroring`, `mirrored_database_stop_mirroring` |
+| KQL Database | `kql_database_create`, `kql_database_update`, `kql_database_delete`, `kql_database_update_definition` |
+| ML Model | `ml_model_create`, `ml_model_update`, `ml_model_delete` |
+| ML Experiment | `ml_experiment_create`, `ml_experiment_update`, `ml_experiment_delete` |
+| Copy Job | `copy_job_create`, `copy_job_update`, `copy_job_delete`, `copy_job_update_definition` |
+| External Data Share | `external_data_share_create`, `external_data_share_revoke` |
 
-**Not guarded:** Read operations (list, get, get_definition, get_bim, get_tmdl), query execution (DAX, KQL, SQL, GraphQL), run/refresh/cancel operations, and export operations.
+**Not guarded:** Read operations (list, get, get_definition, get_bim, get_tmdl), query execution (DAX, KQL, SQL, GraphQL), run/refresh/cancel operations, export operations, and deployment pipeline CRUD (tenant-level, not workspace-scoped).
 
 **Claude Desktop config with guard:**
 ```json
@@ -161,11 +169,19 @@ To avoid large payloads overwhelming MCP clients, definition tools use file path
 | `semantic_model_update_bim` | `definitionFilePath` | Path to model.bim JSON file |
 | `semantic_model_create_tmdl` | `filesDirectoryPath` | Directory of `.tmdl` and `.pbism` files |
 | `semantic_model_update_tmdl` | `filesDirectoryPath` | Directory of `.tmdl` and `.pbism` files |
-| `notebook_update_definition` | `contentFilePath` | Path to notebook content file (or inline `content`) |
-| `eventstream_update_definition` | `contentFilePath` | Path to eventstream definition (or inline `content`) |
-| `report_update_definition` | `partsDirectoryPath` | Directory of report definition files (or inline `parts`) |
+| `notebook_update_definition` | `definitionDirectoryPath` | Directory containing notebook definition files |
+| `eventstream_update_definition` | `definitionDirectoryPath` | Directory containing eventstream definition files |
+| `report_create_definition` | `definitionDirectoryPath` | Directory of PBIR report definition files |
+| `report_update_definition` | `definitionDirectoryPath` | Directory of PBIR report definition files |
 | `variable_library_create` | `definitionDirectoryPath` | Directory of `.json` and `.platform` files |
 | `variable_library_update_definition` | `definitionDirectoryPath` | Directory of `.json` and `.platform` files |
+| `lakehouse_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
+| `warehouse_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
+| `pipeline_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
+| `reflex_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
+| `mirrored_database_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
+| `kql_database_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
+| `copy_job_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
 
 **Output tools** — the server retrieves definitions from Fabric and writes them to disk:
 
@@ -173,11 +189,19 @@ To avoid large payloads overwhelming MCP clients, definition tools use file path
 |------|-----------|-------------------|
 | `semantic_model_get_bim` | `outputFilePath` | Single `model.bim` JSON file |
 | `semantic_model_get_tmdl` | `outputDirectoryPath` | TMDL files preserving folder structure |
+| `notebook_get_definition` | `outputDirectoryPath` | Notebook definition files |
+| `lakehouse_get_definition` | `outputDirectoryPath` | Lakehouse definition files |
+| `warehouse_get_definition` | `outputDirectoryPath` | Warehouse definition files |
+| `pipeline_get_definition` | `outputDirectoryPath` | Pipeline definition files |
 | `report_get_definition` | `outputDirectoryPath` | Report definition files (report.json, pages, visuals) |
+| `dataflow_get_definition` | `outputDirectoryPath` | Dataflow definition files |
 | `eventstream_get_definition` | `outputDirectoryPath` | Eventstream definition files |
 | `graphql_api_get_definition` | `outputDirectoryPath` | GraphQL schema definition files |
 | `reflex_get_definition` | `outputDirectoryPath` | Reflex definition files |
 | `variable_library_get_definition` | `outputDirectoryPath` | Variable library files (variables.json, valueSets/) |
+| `mirrored_database_get_definition` | `outputDirectoryPath` | Mirrored database definition files |
+| `kql_database_get_definition` | `outputDirectoryPath` | KQL database definition files |
+| `copy_job_get_definition` | `outputDirectoryPath` | Copy job definition files |
 
 **TMDL directory structure example:**
 ```
@@ -203,7 +227,7 @@ npm run dev          # Watch mode
 npm run inspect      # Launch MCP Inspector
 ```
 
-## Tools (116 total)
+## Tools (193 total)
 
 ### Auth (4 tools)
 | Tool | Description |
@@ -223,7 +247,7 @@ npm run inspect      # Launch MCP Inspector
 | `workspace_delete` | Delete a workspace |
 | `workspace_list_items` | List all items in a workspace (with optional type filter) |
 
-### Lakehouse (9 tools)
+### Lakehouse (14 tools)
 | Tool | Description |
 |------|-------------|
 | `lakehouse_list` | List all lakehouses in a workspace |
@@ -231,12 +255,17 @@ npm run inspect      # Launch MCP Inspector
 | `lakehouse_create` | Create a new lakehouse (LRO, schemas enabled by default) |
 | `lakehouse_update` | Update lakehouse name or description |
 | `lakehouse_delete` | Delete a lakehouse |
-| `lakehouse_list_tables` | List all tables in a lakehouse |
-| `lakehouse_load_table` | Load data into a table from OneLake (LRO) |
+| `lakehouse_list_tables` | List all tables in a lakehouse (falls back to SQL endpoint for schema-enabled lakehouses) |
+| `lakehouse_load_table` | Load data into a table from OneLake (LRO). Not supported for schema-enabled lakehouses |
 | `lakehouse_create_shortcut` | Create a OneLake shortcut (file, folder, table, or schema level) with support for multiple target types |
 | `lakehouse_get_sql_endpoint` | Get SQL endpoint details |
+| `lakehouse_get_definition` | Get lakehouse definition (LRO). Writes files to `outputDirectoryPath` |
+| `lakehouse_update_definition` | Update lakehouse definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
+| `lakehouse_list_shortcuts` | List all OneLake shortcuts in a lakehouse |
+| `lakehouse_get_shortcut` | Get details of a specific OneLake shortcut |
+| `lakehouse_delete_shortcut` | Delete a OneLake shortcut |
 
-### Warehouse (7 tools)
+### Warehouse (9 tools)
 | Tool | Description |
 |------|-------------|
 | `warehouse_list` | List all warehouses in a workspace |
@@ -246,6 +275,8 @@ npm run inspect      # Launch MCP Inspector
 | `warehouse_delete` | Delete a warehouse |
 | `warehouse_get_sql_endpoint` | Get SQL connection details for a warehouse |
 | `warehouse_list_tables` | List all tables in a warehouse |
+| `warehouse_get_definition` | Get warehouse definition (LRO). Writes files to `outputDirectoryPath` |
+| `warehouse_update_definition` | Update warehouse definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
 
 ### Notebook (10 tools)
 | Tool | Description |
@@ -255,13 +286,13 @@ npm run inspect      # Launch MCP Inspector
 | `notebook_create` | Create a new notebook (LRO) |
 | `notebook_update` | Update notebook name or description |
 | `notebook_delete` | Delete a notebook |
-| `notebook_get_definition` | Get notebook content (decoded from base64) |
-| `notebook_update_definition` | Update notebook content (supports file path reference) |
+| `notebook_get_definition` | Get notebook definition (LRO). Writes files to `outputDirectoryPath` |
+| `notebook_update_definition` | Update notebook definition (LRO). Reads files from `definitionDirectoryPath` |
 | `notebook_run` | Run a notebook on demand |
 | `notebook_get_run_status` | Get notebook run status |
 | `notebook_cancel_run` | Cancel a running notebook |
 
-### Pipeline (13 tools)
+### Pipeline (15 tools)
 | Tool | Description |
 |------|-------------|
 | `pipeline_list` | List all data pipelines |
@@ -277,8 +308,10 @@ npm run inspect      # Launch MCP Inspector
 | `pipeline_create_schedule` | Create a pipeline schedule |
 | `pipeline_update_schedule` | Update a pipeline schedule |
 | `pipeline_delete_schedule` | Delete a pipeline schedule |
+| `pipeline_get_definition` | Get pipeline definition (LRO). Writes files to `outputDirectoryPath` |
+| `pipeline_update_definition` | Update pipeline definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
 
-### Semantic Model (12 tools)
+### Semantic Model (15 tools)
 | Tool | Description |
 |------|-------------|
 | `semantic_model_list` | List all semantic models |
@@ -293,22 +326,28 @@ npm run inspect      # Launch MCP Inspector
 | `semantic_model_get_tmdl` | Get definition in TMDL format (LRO). Writes TMDL files to `outputDirectoryPath` |
 | `semantic_model_update_bim` | Update definition from BIM/JSON file (LRO). Reads `model.bim` from `definitionFilePath` |
 | `semantic_model_update_tmdl` | Update definition from TMDL files (LRO). Reads `.tmdl`/`.pbism` from `filesDirectoryPath` |
+| `semantic_model_get_refresh_history` | Get refresh history (Power BI API) |
+| `semantic_model_take_over` | Take over ownership of a semantic model (Power BI API) |
+| `semantic_model_get_datasources` | Get data sources of a semantic model (Power BI API) |
 
-### Report (10 tools)
+### Report (13 tools)
 | Tool | Description |
 |------|-------------|
 | `report_list` | List all reports |
 | `report_get` | Get report details |
-| `report_create` | Create a new report (LRO) |
+| `report_create_definition` | Create a new report from PBIR definition files (LRO). Reads from `definitionDirectoryPath` |
 | `report_update` | Update report name or description |
 | `report_delete` | Delete a report |
 | `report_clone` | Clone a report (Power BI API) |
-| `report_export` | Export report to file format (Power BI API) |
+| `report_export` | Export report to file format (PDF, PPTX, PNG, etc.) via Power BI API |
 | `report_get_export_status` | Check report export status |
 | `report_get_definition` | Get report definition (LRO). Writes files to `outputDirectoryPath` |
-| `report_update_definition` | Update report definition from parts or directory (LRO) |
+| `report_update_definition` | Update report definition from PBIR directory (LRO). Reads from `definitionDirectoryPath` |
+| `report_rebind` | Rebind a report to a different semantic model/dataset (Power BI API) |
+| `report_get_pages` | Get the list of pages in a report (Power BI API) |
+| `report_get_datasources` | Get data sources used by a report (Power BI API) |
 
-### Dataflow Gen2 (7 tools)
+### Dataflow Gen2 (8 tools)
 | Tool | Description |
 |------|-------------|
 | `dataflow_list` | List all Dataflow Gen2 items |
@@ -318,6 +357,7 @@ npm run inspect      # Launch MCP Inspector
 | `dataflow_delete` | Delete a dataflow |
 | `dataflow_refresh` | Trigger a dataflow refresh |
 | `dataflow_get_refresh_status` | Get refresh job status |
+| `dataflow_get_definition` | Get dataflow definition (LRO). Writes files to `outputDirectoryPath` |
 
 ### Eventhouse (7 tools)
 | Tool | Description |
@@ -339,9 +379,9 @@ npm run inspect      # Launch MCP Inspector
 | `eventstream_update` | Update eventstream name or description |
 | `eventstream_delete` | Delete an eventstream |
 | `eventstream_get_definition` | Get eventstream definition (LRO). Writes files to `outputDirectoryPath` |
-| `eventstream_update_definition` | Update eventstream definition (supports file path reference) |
+| `eventstream_update_definition` | Update eventstream definition (LRO). Reads from `definitionDirectoryPath` |
 
-### Reflex / Activator (6 tools)
+### Reflex / Activator (7 tools)
 | Tool | Description |
 |------|-------------|
 | `reflex_list` | List all Reflex (Activator) items |
@@ -350,6 +390,7 @@ npm run inspect      # Launch MCP Inspector
 | `reflex_update` | Update reflex name or description |
 | `reflex_delete` | Delete a reflex |
 | `reflex_get_definition` | Get reflex definition (LRO). Writes files to `outputDirectoryPath` |
+| `reflex_update_definition` | Update reflex definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
 
 ### GraphQL API (7 tools)
 | Tool | Description |
@@ -368,7 +409,7 @@ npm run inspect      # Launch MCP Inspector
 | `sql_endpoint_list` | List all SQL endpoints |
 | `sql_endpoint_get` | Get SQL endpoint details |
 | `sql_endpoint_get_connection_string` | Get TDS connection string |
-| `sql_endpoint_execute_query` | Execute a T-SQL query against a SQL endpoint |
+| `sql_endpoint_execute_query` | Execute a T-SQL query against a lakehouse or warehouse SQL endpoint |
 
 ### Variable Library (7 tools)
 | Tool | Description |
@@ -380,6 +421,98 @@ npm run inspect      # Launch MCP Inspector
 | `variable_library_delete` | Delete a variable library |
 | `variable_library_get_definition` | Get definition (LRO). Writes files (variables.json, valueSets/) to `outputDirectoryPath` |
 | `variable_library_update_definition` | Update definition from directory of `.json` and `.platform` files (LRO) |
+
+### Git Integration (9 tools)
+| Tool | Description |
+|------|-------------|
+| `git_get_connection` | Get Git connection details for a workspace |
+| `git_get_status` | Get Git status of items (sync state between workspace and remote) |
+| `git_connect` | Connect a workspace to a Git repository (Azure DevOps or GitHub) |
+| `git_disconnect` | Disconnect a workspace from its Git repository |
+| `git_initialize_connection` | Initialize a Git connection after connecting (LRO) |
+| `git_commit_to_git` | Commit workspace changes to the connected Git repository (LRO) |
+| `git_update_from_git` | Update workspace from the connected Git repository (LRO) |
+| `git_get_credentials` | Get Git credentials configuration for the current user |
+| `git_update_credentials` | Update Git credentials configuration for the current user |
+
+### Deployment Pipeline (12 tools)
+| Tool | Description |
+|------|-------------|
+| `deployment_pipeline_list` | List all deployment pipelines accessible to the user |
+| `deployment_pipeline_get` | Get details of a specific deployment pipeline |
+| `deployment_pipeline_create` | Create a new deployment pipeline |
+| `deployment_pipeline_update` | Update deployment pipeline name or description |
+| `deployment_pipeline_delete` | Delete a deployment pipeline |
+| `deployment_pipeline_list_stages` | List all stages in a deployment pipeline |
+| `deployment_pipeline_list_stage_items` | List all items in a specific stage |
+| `deployment_pipeline_assign_workspace` | Assign a workspace to a pipeline stage |
+| `deployment_pipeline_unassign_workspace` | Unassign a workspace from a pipeline stage |
+| `deployment_pipeline_deploy` | Deploy items from one stage to another (LRO) |
+| `deployment_pipeline_list_operations` | List operations (deployment history) |
+| `deployment_pipeline_get_operation` | Get details of a specific deployment operation |
+
+### Mirrored Database (11 tools)
+| Tool | Description |
+|------|-------------|
+| `mirrored_database_list` | List all mirrored databases in a workspace |
+| `mirrored_database_get` | Get details of a specific mirrored database |
+| `mirrored_database_create` | Create a new mirrored database (LRO) |
+| `mirrored_database_update` | Update mirrored database name or description |
+| `mirrored_database_delete` | Delete a mirrored database |
+| `mirrored_database_get_definition` | Get mirrored database definition (LRO). Writes files to `outputDirectoryPath` |
+| `mirrored_database_update_definition` | Update definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
+| `mirrored_database_start_mirroring` | Start mirroring for a mirrored database |
+| `mirrored_database_stop_mirroring` | Stop mirroring for a mirrored database |
+| `mirrored_database_get_mirroring_status` | Get the mirroring status |
+| `mirrored_database_get_tables_mirroring_status` | Get mirroring status of individual tables |
+
+### KQL Database (7 tools)
+| Tool | Description |
+|------|-------------|
+| `kql_database_list` | List all KQL databases in a workspace |
+| `kql_database_get` | Get details of a specific KQL database |
+| `kql_database_create` | Create a new KQL database (LRO). Requires a parent eventhouse |
+| `kql_database_update` | Update KQL database name or description |
+| `kql_database_delete` | Delete a KQL database |
+| `kql_database_get_definition` | Get KQL database definition (LRO). Writes files to `outputDirectoryPath` |
+| `kql_database_update_definition` | Update definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
+
+### ML Model (5 tools)
+| Tool | Description |
+|------|-------------|
+| `ml_model_list` | List all ML models in a workspace |
+| `ml_model_get` | Get details of a specific ML model |
+| `ml_model_create` | Create a new ML model (LRO) |
+| `ml_model_update` | Update ML model name or description |
+| `ml_model_delete` | Delete an ML model |
+
+### ML Experiment (5 tools)
+| Tool | Description |
+|------|-------------|
+| `ml_experiment_list` | List all ML experiments in a workspace |
+| `ml_experiment_get` | Get details of a specific ML experiment |
+| `ml_experiment_create` | Create a new ML experiment (LRO) |
+| `ml_experiment_update` | Update ML experiment name or description |
+| `ml_experiment_delete` | Delete an ML experiment |
+
+### Copy Job (7 tools)
+| Tool | Description |
+|------|-------------|
+| `copy_job_list` | List all copy jobs in a workspace |
+| `copy_job_get` | Get details of a specific copy job |
+| `copy_job_create` | Create a new copy job |
+| `copy_job_update` | Update copy job name or description |
+| `copy_job_delete` | Delete a copy job |
+| `copy_job_get_definition` | Get copy job definition (LRO). Writes files to `outputDirectoryPath` |
+| `copy_job_update_definition` | Update definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
+
+### External Data Share (4 tools)
+| Tool | Description |
+|------|-------------|
+| `external_data_share_list` | List all external data shares for an item |
+| `external_data_share_get` | Get details of a specific external data share |
+| `external_data_share_create` | Create a new external data share for an item |
+| `external_data_share_revoke` | Revoke an external data share |
 
 ## License
 

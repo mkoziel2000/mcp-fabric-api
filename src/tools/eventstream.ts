@@ -6,7 +6,7 @@ import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { decodeBase64, encodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
-import { resolveContentOrFile, writeFilesToDirectory } from "../utils/file-utils.js";
+import { readFilesFromDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 
 export function registerEventstreamTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
@@ -149,27 +149,23 @@ export function registerEventstreamTools(server: McpServer, fabricClient: Fabric
 
   server.tool(
     "eventstream_update_definition",
-    "Update the definition of an eventstream (long-running). Accepts raw content inline or a file path reference.",
+    "Update the definition of an eventstream (long-running). Reads definition files from the specified directory.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       eventstreamId: z.string().describe("The eventstream ID"),
-      content: z.string().optional().describe("The eventstream definition content (will be base64 encoded)"),
-      contentFilePath: z.string().optional().describe("Path to a file containing the eventstream definition (alternative to inline content)"),
-      path: z.string().optional().describe("The definition part path (default: eventstream.json)"),
+      definitionDirectoryPath: z.string().describe("Path to a directory containing eventstream definition files"),
     },
-    async ({ workspaceId, eventstreamId, content, contentFilePath, path }) => {
+    async ({ workspaceId, eventstreamId, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
-        const resolved = await resolveContentOrFile(content, contentFilePath, "content");
+        const resolved = await readFilesFromDirectory(definitionDirectoryPath);
         const body = {
           definition: {
-            parts: [
-              {
-                path: path ?? "eventstream.json",
-                payload: encodeBase64(resolved),
-                payloadType: "InlineBase64",
-              },
-            ],
+            parts: resolved.map((part) => ({
+              path: part.path,
+              payload: encodeBase64(part.content),
+              payloadType: "InlineBase64",
+            })),
           },
         };
         const response = await fabricClient.post(
