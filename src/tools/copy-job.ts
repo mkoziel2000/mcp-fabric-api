@@ -4,6 +4,7 @@ import { FabricClient } from "../client/fabric-client.js";
 import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
+import { runOnDemandJob, getJobInstance, cancelJobInstance, listJobInstances } from "../core/job-scheduler.js";
 import { encodeBase64, decodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
@@ -177,6 +178,76 @@ export function registerCopyJobTools(server: McpServer, fabricClient: FabricClie
           return { content: [{ type: "text", text: JSON.stringify(state, null, 2) }] };
         }
         return { content: [{ type: "text", text: "Copy job definition updated successfully" }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "copy_job_run",
+    "Run a copy job on demand",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      copyJobId: z.string().describe("The copy job ID"),
+    },
+    async ({ workspaceId, copyJobId }) => {
+      try {
+        const job = await runOnDemandJob(fabricClient, workspaceId, copyJobId, "CopyJob");
+        return { content: [{ type: "text", text: JSON.stringify(job, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "copy_job_get_run_status",
+    "Get the status of a copy job run",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      copyJobId: z.string().describe("The copy job ID"),
+      jobInstanceId: z.string().describe("The job instance ID from copy_job_run"),
+    },
+    async ({ workspaceId, copyJobId, jobInstanceId }) => {
+      try {
+        const job = await getJobInstance(fabricClient, workspaceId, copyJobId, jobInstanceId);
+        return { content: [{ type: "text", text: JSON.stringify(job, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "copy_job_cancel_run",
+    "Cancel a running copy job",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      copyJobId: z.string().describe("The copy job ID"),
+      jobInstanceId: z.string().describe("The job instance ID to cancel"),
+    },
+    async ({ workspaceId, copyJobId, jobInstanceId }) => {
+      try {
+        await cancelJobInstance(fabricClient, workspaceId, copyJobId, jobInstanceId);
+        return { content: [{ type: "text", text: `Copy job run ${jobInstanceId} cancelled successfully` }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "copy_job_list_runs",
+    "List all run instances for a copy job",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      copyJobId: z.string().describe("The copy job ID"),
+    },
+    async ({ workspaceId, copyJobId }) => {
+      try {
+        const jobs = await listJobInstances(fabricClient, workspaceId, copyJobId);
+        return { content: [{ type: "text", text: JSON.stringify(jobs, null, 2) }] };
       } catch (error) {
         return formatToolError(error);
       }

@@ -227,7 +227,7 @@ npm run dev          # Watch mode
 npm run inspect      # Launch MCP Inspector
 ```
 
-## Tools (193 total)
+## Tools (197 total)
 
 ### Auth (4 tools)
 | Tool | Description |
@@ -495,7 +495,7 @@ npm run inspect      # Launch MCP Inspector
 | `ml_experiment_update` | Update ML experiment name or description |
 | `ml_experiment_delete` | Delete an ML experiment |
 
-### Copy Job (7 tools)
+### Copy Job (11 tools)
 | Tool | Description |
 |------|-------------|
 | `copy_job_list` | List all copy jobs in a workspace |
@@ -505,6 +505,10 @@ npm run inspect      # Launch MCP Inspector
 | `copy_job_delete` | Delete a copy job |
 | `copy_job_get_definition` | Get copy job definition (LRO). Writes files to `outputDirectoryPath` |
 | `copy_job_update_definition` | Update definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
+| `copy_job_run` | Run a copy job on demand |
+| `copy_job_get_run_status` | Get copy job run status |
+| `copy_job_cancel_run` | Cancel a running copy job |
+| `copy_job_list_runs` | List all run instances for a copy job |
 
 ### External Data Share (4 tools)
 | Tool | Description |

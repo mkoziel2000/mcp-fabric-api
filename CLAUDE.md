@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-mcp-fabric-api is an MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. It wraps 116 tools across 15 domains (workspaces, lakehouses, warehouses, notebooks, pipelines, semantic models, reports, dataflows, eventhouses, eventstreams, reflexes, GraphQL APIs, SQL endpoints, variable libraries, auth) to enable AI assistants to manage Fabric resources.
+mcp-fabric-api is an MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. It wraps 120 tools across 15 domains (workspaces, lakehouses, warehouses, notebooks, pipelines, semantic models, reports, dataflows, eventhouses, eventstreams, reflexes, GraphQL APIs, SQL endpoints, variable libraries, auth) to enable AI assistants to manage Fabric resources.
 
 ## Architecture
 
