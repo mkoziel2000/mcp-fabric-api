@@ -7,8 +7,7 @@ import { pollOperation, getOperationResult } from "../core/lro.js";
 import { encodeBase64, decodeBase64 } from "../utils/base64.js";
 import { runOnDemandJob, getJobInstance, cancelJobInstance, listJobInstances } from "../core/job-scheduler.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
-import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
-import type { FileEntry } from "../utils/file-utils.js";
+import { readFilesFromDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 
 export function registerPipelineTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
@@ -331,20 +330,16 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
 
   server.tool(
     "pipeline_update_definition",
-    "Update a data pipeline's definition (long-running). Accepts definition parts inline or a directory path.",
+    "Update a data pipeline's definition (long-running). Reads definition files from the specified directory.",
     {
       workspaceId: z.string().describe("The workspace ID"),
       pipelineId: z.string().describe("The pipeline ID"),
-      parts: z.array(z.object({
-        path: z.string().describe("The definition part path"),
-        content: z.string().describe("The file content as a string"),
-      })).optional().describe("Array of definition parts to upload"),
-      partsDirectoryPath: z.string().optional().describe("Path to a directory containing definition files"),
+      definitionDirectoryPath: z.string().describe("Path to a directory containing pipeline definition files"),
     },
-    async ({ workspaceId, pipelineId, parts, partsDirectoryPath }) => {
+    async ({ workspaceId, pipelineId, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
-        const resolved: FileEntry[] = await resolveFilesOrDirectory(parts, partsDirectoryPath);
+        const resolved = await readFilesFromDirectory(definitionDirectoryPath);
         const body = {
           definition: {
             parts: resolved.map((part) => ({
