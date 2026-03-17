@@ -157,6 +157,63 @@ WRITABLE_WORKSPACES is not configured. Destructive actions are blocked by defaul
 Workspace "Production-Analytics" is not in the writable workspaces list. Allowed patterns: *-Dev, *-Test, Sandbox*
 ```
 
+### Debug Logging
+
+Enable verbose debug logging to diagnose API errors, inspect request/response details, and trace long-running operations. All log output goes to `stderr` (visible in Claude Desktop's log files, never interferes with JSON-RPC on stdout).
+
+Set the `LOG_LEVEL` environment variable to `debug`:
+
+**Claude Desktop config:**
+```json
+{
+  "mcpServers": {
+    "fabric": {
+      "command": "npx",
+      "args": ["-y", "@einlogic/mcp-fabric-api"],
+      "env": {
+        "LOG_LEVEL": "debug"
+      }
+    }
+  }
+}
+```
+
+**Claude Code CLI:**
+```bash
+LOG_LEVEL=debug claude mcp add fabric -- npx -y @einlogic/mcp-fabric-api
+```
+
+**What gets logged at debug level:**
+
+| Category | Details logged |
+|----------|---------------|
+| HTTP requests | Method, full URL, request body size in bytes |
+| HTTP responses | Status code, duration (ms), `x-ms-request-id` header |
+| Definition uploads | Part paths, payload types, payload sizes — never payload content |
+| API errors | Full error body including `errorCode`, `details[]`, `innererror`, `relatedResource`, `x-ms-request-id` |
+| LRO polling | Operation ID, poll count, elapsed time, final status |
+| Pagination | Page count, items per page, total items |
+| SQL/KQL queries | Server, database, duration, column/row counts — never query text or result data |
+| Rate limiting | Retry-after duration, affected endpoint |
+
+**Compliance:** Debug logging never captures actual data content — no query text, no query results, no definition payloads, no bearer tokens. Only structural metadata (URLs, sizes, counts, timing, error details) is logged.
+
+**Viewing logs in Claude Desktop:**
+
+- **macOS:** `~/Library/Logs/Claude/mcp-server-fabric.log`
+- **Windows:** `%APPDATA%\Claude\logs\mcp-server-fabric.log`
+
+You can also tail the log in real time:
+```bash
+# macOS
+tail -f ~/Library/Logs/Claude/mcp-server-fabric.log
+
+# Windows (PowerShell)
+Get-Content "$env:APPDATA\Claude\logs\mcp-server-fabric.log" -Wait
+```
+
+The `x-ms-request-id` value logged with every API error is the key identifier needed when opening a support case with Microsoft for Fabric API issues.
+
 ### File-Based I/O
 
 To avoid large payloads overwhelming MCP clients, definition tools use file paths instead of inline content. The server reads files from disk when sending definitions to Fabric, and writes files to disk when retrieving definitions from Fabric.

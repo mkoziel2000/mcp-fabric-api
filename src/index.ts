@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createServer } from "./server.js";
+import { logger } from "./utils/logger.js";
 
 const transport = process.env.TRANSPORT ?? "stdio";
 
@@ -12,6 +13,9 @@ async function startStdio() {
   const stdioTransport = new StdioServerTransport();
   await server.connect(stdioTransport);
   console.error("MCP Fabric API server running on stdio");
+  if (logger.isDebug()) {
+    logger.info("Server", "Debug logging enabled — set LOG_LEVEL=info or remove LOG_LEVEL to disable");
+  }
 }
 
 async function startHttp() {
@@ -95,6 +99,9 @@ async function startHttp() {
 
   app.listen(port, () => {
     console.error(`MCP Fabric API server running on http://localhost:${port}/mcp`);
+    if (logger.isDebug()) {
+      logger.info("Server", "Debug logging enabled — set LOG_LEVEL=info or remove LOG_LEVEL to disable");
+    }
   });
 }
 

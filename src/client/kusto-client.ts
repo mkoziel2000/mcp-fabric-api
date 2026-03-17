@@ -1,7 +1,9 @@
 import { TokenManager } from "../auth/token-manager.js";
+import { logger } from "../utils/logger.js";
 import type { KqlQueryResult } from "../core/types.js";
 
 const DEFAULT_MAX_ROWS = 1000;
+const COMPONENT = "KustoClient";
 
 interface KustoV2Frame {
   FrameType: string;
@@ -33,6 +35,9 @@ export class KustoClient {
       },
     };
 
+    logger.debug(COMPONENT, `POST ${url}`, { database, maxRows });
+    const startTime = Date.now();
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -42,6 +47,8 @@ export class KustoClient {
       },
       body: JSON.stringify(body),
     });
+
+    const durationMs = Date.now() - startTime;
 
     if (!response.ok) {
       let errorDetail: string;
@@ -53,6 +60,12 @@ export class KustoClient {
       } catch {
         errorDetail = await response.text();
       }
+      logger.error(COMPONENT, `KQL query failed`, {
+        status: response.status,
+        database,
+        durationMs,
+        errorDetail,
+      });
       throw new Error(`KQL query failed (HTTP ${response.status}): ${errorDetail}`);
     }
 
@@ -76,6 +89,14 @@ export class KustoClient {
         record[columns[i]] = row[i];
       }
       return record;
+    });
+
+    logger.debug(COMPONENT, `KQL query completed`, {
+      status: response.status,
+      database,
+      durationMs,
+      columnCount: columns.length,
+      rowCount: rows.length,
     });
 
     return { columns, rows, rowCount: rows.length };

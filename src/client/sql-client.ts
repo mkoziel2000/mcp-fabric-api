@@ -1,9 +1,11 @@
 import { Connection, Request } from "tedious";
 import { TokenManager } from "../auth/token-manager.js";
+import { logger } from "../utils/logger.js";
 import type { SqlQueryResult } from "../core/types.js";
 
 const DEFAULT_MAX_ROWS = 1000;
 const QUERY_TIMEOUT_MS = 30000;
+const COMPONENT = "SqlClient";
 
 export class SqlClient {
   constructor(private tokenManager: TokenManager) {}
@@ -15,6 +17,9 @@ export class SqlClient {
     maxRows: number = DEFAULT_MAX_ROWS
   ): Promise<SqlQueryResult> {
     const token = await this.tokenManager.getDatabaseToken();
+
+    logger.debug(COMPONENT, `Connecting to ${server}`, { database, maxRows });
+    const startTime = Date.now();
 
     return new Promise<SqlQueryResult>((resolve, reject) => {
       const columns: string[] = [];
@@ -39,16 +44,28 @@ export class SqlClient {
 
       connection.on("connect", (err) => {
         if (err) {
+          const durationMs = Date.now() - startTime;
+          logger.error(COMPONENT, `Connection failed to ${server}`, { database, durationMs, error: err.message });
           reject(new Error(`SQL connection failed: ${err.message}`));
           return;
         }
 
+        logger.debug(COMPONENT, `Connected to ${server}`, { database, durationMs: Date.now() - startTime });
+
         const request = new Request(query, (reqErr, rowCount) => {
+          const durationMs = Date.now() - startTime;
           connection.close();
           if (reqErr) {
+            logger.error(COMPONENT, `Query failed on ${server}`, { database, durationMs, error: reqErr.message });
             reject(new Error(`SQL query failed: ${reqErr.message}`));
             return;
           }
+          logger.debug(COMPONENT, `Query completed on ${server}`, {
+            database,
+            durationMs,
+            columnCount: columns.length,
+            rowCount: rowCount ?? rows.length,
+          });
           resolve({ columns, rows, rowCount: rowCount ?? rows.length });
         });
 
@@ -77,6 +94,7 @@ export class SqlClient {
       });
 
       connection.on("error", (err) => {
+        logger.error(COMPONENT, `Connection error on ${server}`, { database, error: err.message });
         reject(new Error(`SQL connection error: ${err.message}`));
       });
 
