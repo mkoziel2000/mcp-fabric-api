@@ -2,17 +2,28 @@
 
 import { createServer } from "./server.js";
 import { logger } from "./utils/logger.js";
+import type { AuthMethod, AuthConfig } from "./auth/token-manager.js";
 
 const transport = process.env.TRANSPORT ?? "stdio";
+
+function buildAuthConfig(): AuthConfig {
+  return {
+    method: (process.env.AUTH_METHOD as AuthMethod) ?? "default",
+    tenantId: process.env.AZURE_TENANT_ID,
+    clientId: process.env.AZURE_CLIENT_ID,
+    clientSecret: process.env.AZURE_CLIENT_SECRET,
+  };
+}
 
 async function startStdio() {
   const { StdioServerTransport } = await import(
     "@modelcontextprotocol/sdk/server/stdio.js"
   );
-  const server = createServer();
+  const authConfig = buildAuthConfig();
+  const server = createServer({ authConfig });
   const stdioTransport = new StdioServerTransport();
   await server.connect(stdioTransport);
-  console.error("MCP Fabric API server running on stdio");
+  console.error(`MCP Fabric API server running on stdio (auth: ${authConfig.method})`);
   if (logger.isDebug()) {
     logger.info("Server", "Debug logging enabled — set LOG_LEVEL=info or remove LOG_LEVEL to disable");
   }
