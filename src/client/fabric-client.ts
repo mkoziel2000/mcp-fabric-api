@@ -194,4 +194,25 @@ export class FabricClient {
     const response = await fetch(url, { headers });
     return this.handleResponse<T>(response, "GET", url, startTime);
   }
+
+  async postBinary<T = unknown>(
+    path: string,
+    body: Buffer | Uint8Array | string,
+    contentType: string = "application/octet-stream"
+  ): Promise<FabricResponse<T>> {
+    const url = `${FABRIC_BASE_URL}${path}`;
+    const bytes = typeof body === "string" ? Buffer.byteLength(body) : body.byteLength;
+    logger.debug(COMPONENT, `POST ${url}`, { bodyBytes: bytes, contentType });
+    const startTime = Date.now();
+    const token = await this.tokenManager.getFabricToken();
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": contentType,
+      },
+      body: body as BodyInit,
+    });
+    return this.handleResponse<T>(response, "POST", url, startTime);
+  }
 }

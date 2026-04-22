@@ -9,11 +9,16 @@ import { encodeBase64, decodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { readFilesFromDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerReportTools(server: McpServer, fabricClient: FabricClient, powerBIClient: PowerBIClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "report_list",
     "List all reports in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const reports = await paginateAll(fabricClient, `/workspaces/${workspaceId}/reports`);
@@ -31,6 +36,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       workspaceId: z.string().describe("The workspace ID"),
       reportId: z.string().describe("The report ID"),
     },
+    READ,
     async ({ workspaceId, reportId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/reports/${reportId}`);
@@ -50,6 +56,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       description: z.string().optional().describe("Description of the report"),
       definitionDirectoryPath: z.string().describe("Path to a directory containing report definition files (PBIR format)"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -87,6 +94,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, reportId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -108,6 +116,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       workspaceId: z.string().describe("The workspace ID"),
       reportId: z.string().describe("The report ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, reportId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -129,6 +138,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       targetWorkspaceId: z.string().optional().describe("Target workspace ID (default: same workspace)"),
       targetModelId: z.string().optional().describe("Target semantic model/dataset ID"),
     },
+    WRITE,
     async ({ workspaceId, reportId, name, targetWorkspaceId, targetModelId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, targetWorkspaceId ?? workspaceId);
@@ -154,6 +164,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       reportId: z.string().describe("The report ID to export"),
       format: z.enum(["PDF", "PPTX", "PNG", "XLSX", "DOCX", "CSV", "XML", "MHTML", "IMAGE", "ACCESSIBLEPDF"]).describe("Export format"),
     },
+    WRITE,
     async ({ workspaceId, reportId, format }) => {
       try {
         const response = await powerBIClient.post<Record<string, unknown>>(
@@ -175,6 +186,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       reportId: z.string().describe("The report ID"),
       exportId: z.string().describe("The export ID from report_export"),
     },
+    READ,
     async ({ workspaceId, reportId, exportId }) => {
       try {
         const response = await powerBIClient.get(
@@ -195,6 +207,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       reportId: z.string().describe("The report ID"),
       outputDirectoryPath: z.string().describe("Directory path where report definition files will be written"),
     },
+    READ,
     async ({ workspaceId, reportId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -235,6 +248,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       reportId: z.string().describe("The report ID"),
       definitionDirectoryPath: z.string().describe("Path to a directory containing report definition files (PBIR format)"),
     },
+    WRITE,
     async ({ workspaceId, reportId, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -271,6 +285,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       reportId: z.string().describe("The report ID"),
       datasetId: z.string().describe("The target semantic model/dataset ID to rebind to"),
     },
+    WRITE,
     async ({ workspaceId, reportId, datasetId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -292,6 +307,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       workspaceId: z.string().describe("The workspace ID"),
       reportId: z.string().describe("The report ID"),
     },
+    READ,
     async ({ workspaceId, reportId }) => {
       try {
         const response = await powerBIClient.get(
@@ -311,6 +327,7 @@ export function registerReportTools(server: McpServer, fabricClient: FabricClien
       workspaceId: z.string().describe("The workspace ID"),
       reportId: z.string().describe("The report ID"),
     },
+    READ,
     async ({ workspaceId, reportId }) => {
       try {
         const response = await powerBIClient.get(

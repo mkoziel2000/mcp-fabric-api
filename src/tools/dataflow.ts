@@ -9,11 +9,16 @@ import { runOnDemandJob, getJobInstance, cancelJobInstance } from "../core/job-s
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { writeFilesToDirectory } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerDataflowTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "dataflow_list",
     "List all Dataflow Gen2 items in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const items = await paginateAll(fabricClient, `/workspaces/${workspaceId}/items?type=DataflowGen2`);
@@ -31,6 +36,7 @@ export function registerDataflowTools(server: McpServer, fabricClient: FabricCli
       workspaceId: z.string().describe("The workspace ID"),
       dataflowId: z.string().describe("The dataflow ID"),
     },
+    READ,
     async ({ workspaceId, dataflowId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/items/${dataflowId}`);
@@ -49,6 +55,7 @@ export function registerDataflowTools(server: McpServer, fabricClient: FabricCli
       displayName: z.string().describe("Display name for the dataflow"),
       description: z.string().optional().describe("Description of the dataflow"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -71,6 +78,7 @@ export function registerDataflowTools(server: McpServer, fabricClient: FabricCli
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, dataflowId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -92,6 +100,7 @@ export function registerDataflowTools(server: McpServer, fabricClient: FabricCli
       workspaceId: z.string().describe("The workspace ID"),
       dataflowId: z.string().describe("The dataflow ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, dataflowId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -110,6 +119,7 @@ export function registerDataflowTools(server: McpServer, fabricClient: FabricCli
       workspaceId: z.string().describe("The workspace ID"),
       dataflowId: z.string().describe("The dataflow ID"),
     },
+    WRITE,
     async ({ workspaceId, dataflowId }) => {
       try {
         const job = await runOnDemandJob(fabricClient, workspaceId, dataflowId, "Refresh");
@@ -128,6 +138,7 @@ export function registerDataflowTools(server: McpServer, fabricClient: FabricCli
       dataflowId: z.string().describe("The dataflow ID"),
       jobInstanceId: z.string().describe("The job instance ID from dataflow_refresh"),
     },
+    READ,
     async ({ workspaceId, dataflowId, jobInstanceId }) => {
       try {
         const job = await getJobInstance(fabricClient, workspaceId, dataflowId, jobInstanceId);
@@ -146,6 +157,7 @@ export function registerDataflowTools(server: McpServer, fabricClient: FabricCli
       dataflowId: z.string().describe("The dataflow ID"),
       outputDirectoryPath: z.string().describe("Directory path where definition files will be written"),
     },
+    READ,
     async ({ workspaceId, dataflowId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(

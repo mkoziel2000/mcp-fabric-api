@@ -7,11 +7,16 @@ import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerEventhouseTools(server: McpServer, fabricClient: FabricClient, kustoClient: KustoClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "eventhouse_list",
     "List all eventhouses in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const eventhouses = await paginateAll(fabricClient, `/workspaces/${workspaceId}/eventhouses`);
@@ -29,6 +34,7 @@ export function registerEventhouseTools(server: McpServer, fabricClient: FabricC
       workspaceId: z.string().describe("The workspace ID"),
       eventhouseId: z.string().describe("The eventhouse ID"),
     },
+    READ,
     async ({ workspaceId, eventhouseId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/eventhouses/${eventhouseId}`);
@@ -47,6 +53,7 @@ export function registerEventhouseTools(server: McpServer, fabricClient: FabricC
       displayName: z.string().describe("Display name for the eventhouse"),
       description: z.string().optional().describe("Description of the eventhouse"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -74,6 +81,7 @@ export function registerEventhouseTools(server: McpServer, fabricClient: FabricC
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, eventhouseId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -95,6 +103,7 @@ export function registerEventhouseTools(server: McpServer, fabricClient: FabricC
       workspaceId: z.string().describe("The workspace ID"),
       eventhouseId: z.string().describe("The eventhouse ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, eventhouseId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -113,6 +122,7 @@ export function registerEventhouseTools(server: McpServer, fabricClient: FabricC
       workspaceId: z.string().describe("The workspace ID"),
       eventhouseId: z.string().describe("The eventhouse ID"),
     },
+    READ,
     async ({ workspaceId, eventhouseId }) => {
       try {
         const response = await fabricClient.get<Record<string, unknown>>(`/workspaces/${workspaceId}/eventhouses/${eventhouseId}`);
@@ -144,6 +154,7 @@ export function registerEventhouseTools(server: McpServer, fabricClient: FabricC
       query: z.string().describe("KQL query string to execute"),
       maxRows: z.number().optional().describe("Maximum number of rows to return (default 1000)"),
     },
+    WRITE,
     async ({ workspaceId, eventhouseId, database, query, maxRows }) => {
       try {
         const response = await fabricClient.get<Record<string, unknown>>(`/workspaces/${workspaceId}/eventhouses/${eventhouseId}`);

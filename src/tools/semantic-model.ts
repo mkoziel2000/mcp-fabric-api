@@ -11,11 +11,16 @@ import type { DefinitionPart } from "../utils/tmdl.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { readContentFromFile, readFilesFromDirectory, writeContentToFile, writeFilesToDirectory } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerSemanticModelTools(server: McpServer, fabricClient: FabricClient, powerBIClient: PowerBIClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "semantic_model_list",
     "List all semantic models in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const models = await paginateAll(fabricClient, `/workspaces/${workspaceId}/semanticModels`);
@@ -33,6 +38,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       workspaceId: z.string().describe("The workspace ID"),
       semanticModelId: z.string().describe("The semantic model ID"),
     },
+    READ,
     async ({ workspaceId, semanticModelId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/semanticModels/${semanticModelId}`);
@@ -52,6 +58,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       description: z.string().optional().describe("Description of the semantic model"),
       definitionFilePath: z.string().describe("Path to a file containing the model.bim JSON"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description, definitionFilePath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -96,6 +103,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       description: z.string().optional().describe("Description of the semantic model"),
       filesDirectoryPath: z.string().describe("Path to a directory containing .tmdl and .pbism files"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description, filesDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -135,6 +143,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, semanticModelId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -156,6 +165,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       workspaceId: z.string().describe("The workspace ID"),
       semanticModelId: z.string().describe("The semantic model ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, semanticModelId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -174,6 +184,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       workspaceId: z.string().describe("The workspace ID (Power BI group ID)"),
       semanticModelId: z.string().describe("The semantic model/dataset ID"),
     },
+    WRITE,
     async ({ workspaceId, semanticModelId }) => {
       try {
         const response = await powerBIClient.post(
@@ -195,6 +206,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       semanticModelId: z.string().describe("The semantic model/dataset ID"),
       query: z.string().describe("The DAX query to execute (e.g., 'EVALUATE Sales')"),
     },
+    READ,
     async ({ workspaceId, semanticModelId, query }) => {
       try {
         const response = await powerBIClient.post<Record<string, unknown>>(
@@ -219,6 +231,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       semanticModelId: z.string().describe("The semantic model ID"),
       outputFilePath: z.string().describe("File path where the model.bim JSON will be written"),
     },
+    READ,
     async ({ workspaceId, semanticModelId, outputFilePath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -259,6 +272,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       semanticModelId: z.string().describe("The semantic model ID"),
       outputDirectoryPath: z.string().describe("Directory path where TMDL files will be written"),
     },
+    READ,
     async ({ workspaceId, semanticModelId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -295,6 +309,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       semanticModelId: z.string().describe("The semantic model ID"),
       definitionFilePath: z.string().describe("Path to a file containing the model.bim JSON"),
     },
+    WRITE,
     async ({ workspaceId, semanticModelId, definitionFilePath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -338,6 +353,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       semanticModelId: z.string().describe("The semantic model ID"),
       filesDirectoryPath: z.string().describe("Path to a directory containing .tmdl and .pbism files"),
     },
+    WRITE,
     async ({ workspaceId, semanticModelId, filesDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -375,6 +391,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       workspaceId: z.string().describe("The workspace ID (Power BI group ID)"),
       semanticModelId: z.string().describe("The semantic model/dataset ID"),
     },
+    READ,
     async ({ workspaceId, semanticModelId }) => {
       try {
         const response = await powerBIClient.get(
@@ -394,6 +411,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       workspaceId: z.string().describe("The workspace ID (Power BI group ID)"),
       semanticModelId: z.string().describe("The semantic model/dataset ID"),
     },
+    WRITE,
     async ({ workspaceId, semanticModelId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -414,6 +432,7 @@ export function registerSemanticModelTools(server: McpServer, fabricClient: Fabr
       workspaceId: z.string().describe("The workspace ID (Power BI group ID)"),
       semanticModelId: z.string().describe("The semantic model/dataset ID"),
     },
+    READ,
     async ({ workspaceId, semanticModelId }) => {
       try {
         const response = await powerBIClient.get(

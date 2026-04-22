@@ -6,11 +6,16 @@ import { paginateAll } from "../core/pagination.js";
 import { pollOperation } from "../core/lro.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerDeploymentPipelineTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "deployment_pipeline_list",
     "List all deployment pipelines accessible to the user",
     {},
+    READ,
     async () => {
       try {
         const pipelines = await paginateAll(fabricClient, `/deploymentPipelines`);
@@ -25,6 +30,7 @@ export function registerDeploymentPipelineTools(server: McpServer, fabricClient:
     "deployment_pipeline_get",
     "Get details of a specific deployment pipeline",
     { pipelineId: z.string().describe("The deployment pipeline ID") },
+    READ,
     async ({ pipelineId }) => {
       try {
         const response = await fabricClient.get(`/deploymentPipelines/${pipelineId}`);
@@ -42,6 +48,7 @@ export function registerDeploymentPipelineTools(server: McpServer, fabricClient:
       displayName: z.string().describe("Display name for the deployment pipeline"),
       description: z.string().optional().describe("Description of the deployment pipeline"),
     },
+    WRITE,
     async ({ displayName, description }) => {
       try {
         const body: Record<string, unknown> = { displayName };
@@ -62,6 +69,7 @@ export function registerDeploymentPipelineTools(server: McpServer, fabricClient:
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ pipelineId, displayName, description }) => {
       try {
         const body: Record<string, unknown> = {};
@@ -79,6 +87,7 @@ export function registerDeploymentPipelineTools(server: McpServer, fabricClient:
     "deployment_pipeline_delete",
     "Delete a deployment pipeline",
     { pipelineId: z.string().describe("The deployment pipeline ID") },
+    DESTRUCTIVE,
     async ({ pipelineId }) => {
       try {
         await fabricClient.delete(`/deploymentPipelines/${pipelineId}`);
@@ -93,6 +102,7 @@ export function registerDeploymentPipelineTools(server: McpServer, fabricClient:
     "deployment_pipeline_list_stages",
     "List all stages in a deployment pipeline",
     { pipelineId: z.string().describe("The deployment pipeline ID") },
+    READ,
     async ({ pipelineId }) => {
       try {
         const stages = await paginateAll(fabricClient, `/deploymentPipelines/${pipelineId}/stages`);
@@ -110,6 +120,7 @@ export function registerDeploymentPipelineTools(server: McpServer, fabricClient:
       pipelineId: z.string().describe("The deployment pipeline ID"),
       stageId: z.string().describe("The stage ID"),
     },
+    READ,
     async ({ pipelineId, stageId }) => {
       try {
         const items = await paginateAll(fabricClient, `/deploymentPipelines/${pipelineId}/stages/${stageId}/items`);
@@ -128,6 +139,7 @@ export function registerDeploymentPipelineTools(server: McpServer, fabricClient:
       stageId: z.string().describe("The stage ID"),
       workspaceId: z.string().describe("The workspace ID to assign"),
     },
+    WRITE,
     async ({ pipelineId, stageId, workspaceId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -150,6 +162,7 @@ export function registerDeploymentPipelineTools(server: McpServer, fabricClient:
       stageId: z.string().describe("The stage ID"),
       workspaceId: z.string().describe("The workspace ID to unassign"),
     },
+    DESTRUCTIVE,
     async ({ pipelineId, stageId, workspaceId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -178,6 +191,7 @@ export function registerDeploymentPipelineTools(server: McpServer, fabricClient:
       note: z.string().optional().describe("Deployment note"),
       workspaceId: z.string().optional().describe("The workspace ID (for workspace guard validation)"),
     },
+    WRITE,
     async ({ pipelineId, sourceStageId, targetStageId, items, note, workspaceId }) => {
       try {
         if (workspaceId) {
@@ -203,6 +217,7 @@ export function registerDeploymentPipelineTools(server: McpServer, fabricClient:
     "deployment_pipeline_list_operations",
     "List operations (deployment history) for a deployment pipeline",
     { pipelineId: z.string().describe("The deployment pipeline ID") },
+    READ,
     async ({ pipelineId }) => {
       try {
         const operations = await paginateAll(fabricClient, `/deploymentPipelines/${pipelineId}/operations`);
@@ -220,6 +235,7 @@ export function registerDeploymentPipelineTools(server: McpServer, fabricClient:
       pipelineId: z.string().describe("The deployment pipeline ID"),
       operationId: z.string().describe("The operation ID"),
     },
+    READ,
     async ({ pipelineId, operationId }) => {
       try {
         const response = await fabricClient.get(`/deploymentPipelines/${pipelineId}/operations/${operationId}`);

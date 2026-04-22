@@ -8,11 +8,16 @@ import { decodeBase64, encodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { readFilesFromDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerEventstreamTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "eventstream_list",
     "List all eventstreams in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const eventstreams = await paginateAll(fabricClient, `/workspaces/${workspaceId}/eventstreams`);
@@ -30,6 +35,7 @@ export function registerEventstreamTools(server: McpServer, fabricClient: Fabric
       workspaceId: z.string().describe("The workspace ID"),
       eventstreamId: z.string().describe("The eventstream ID"),
     },
+    READ,
     async ({ workspaceId, eventstreamId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/eventstreams/${eventstreamId}`);
@@ -48,6 +54,7 @@ export function registerEventstreamTools(server: McpServer, fabricClient: Fabric
       displayName: z.string().describe("Display name for the eventstream"),
       description: z.string().optional().describe("Description of the eventstream"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -75,6 +82,7 @@ export function registerEventstreamTools(server: McpServer, fabricClient: Fabric
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, eventstreamId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -96,6 +104,7 @@ export function registerEventstreamTools(server: McpServer, fabricClient: Fabric
       workspaceId: z.string().describe("The workspace ID"),
       eventstreamId: z.string().describe("The eventstream ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, eventstreamId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -115,6 +124,7 @@ export function registerEventstreamTools(server: McpServer, fabricClient: Fabric
       eventstreamId: z.string().describe("The eventstream ID"),
       outputDirectoryPath: z.string().describe("Directory path where eventstream definition files will be written"),
     },
+    READ,
     async ({ workspaceId, eventstreamId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -155,6 +165,7 @@ export function registerEventstreamTools(server: McpServer, fabricClient: Fabric
       eventstreamId: z.string().describe("The eventstream ID"),
       definitionDirectoryPath: z.string().describe("Path to a directory containing eventstream definition files"),
     },
+    WRITE,
     async ({ workspaceId, eventstreamId, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);

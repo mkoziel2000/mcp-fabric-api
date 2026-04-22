@@ -1,6 +1,6 @@
 # mcp-fabric-api
 
-MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. Built for data engineers and data analysts who want to use AI assistants beyond Copilot — such as Claude, Claude Code, or any MCP-compatible client — to build and manage their Fabric components. Covers workspaces, lakehouses, warehouses, notebooks, pipelines, semantic models, reports, dataflows, eventhouses, eventstreams, reflexes, GraphQL APIs, SQL endpoints, variable libraries, git integration, deployment pipelines, mirrored databases, KQL databases, ML models, ML experiments, copy jobs, and external data shares.
+MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. Built for data engineers and data analysts who want to use AI assistants beyond Copilot — such as Claude, Claude Code, or any MCP-compatible client — to build and manage their Fabric components. Covers workspaces, lakehouses, warehouses, notebooks, pipelines, semantic models, reports, dataflows, eventhouses, eventstreams, reflexes, GraphQL APIs, SQL endpoints, variable libraries, git integration, deployment pipelines, mirrored databases, KQL databases, ML models, ML experiments, copy jobs, external data shares, and environments (Spark compute + libraries, with notebook attach/detach).
 
 > **Safe by default:** This server blocks all destructive operations (create, update, delete) until you explicitly configure the `WRITABLE_WORKSPACES` environment variable. Read operations always work. Set `WRITABLE_WORKSPACES="*"` to allow writes to all workspaces, or use patterns to limit access. See [Workspace Safety Guard](#workspace-safety-guard) for details.
 
@@ -99,14 +99,14 @@ WRITABLE_WORKSPACES=*-Dev,*-Test,Sandbox*
 - `Sandbox*` matches "Sandbox-123", "Sandbox-Mike"
 - `Exact-Name` matches only "Exact-Name" (case-insensitive)
 
-**Guarded tools (89 total)** — every tool that creates, updates, or deletes workspace items:
+**Guarded tools (102 total)** — every tool that creates, updates, or deletes workspace items:
 
 | Domain | Guarded tools |
 |--------|--------------|
 | Workspace | `workspace_update`, `workspace_delete` |
 | Lakehouse | `lakehouse_create`, `lakehouse_update`, `lakehouse_delete`, `lakehouse_load_table`, `lakehouse_create_shortcut`, `lakehouse_update_definition`, `lakehouse_delete_shortcut` |
 | Warehouse | `warehouse_create`, `warehouse_update`, `warehouse_delete`, `warehouse_update_definition` |
-| Notebook | `notebook_create`, `notebook_update`, `notebook_delete`, `notebook_update_definition` |
+| Notebook | `notebook_create`, `notebook_update`, `notebook_delete`, `notebook_update_definition`, `notebook_attach_environment`, `notebook_detach_environment` |
 | Pipeline | `pipeline_create`, `pipeline_update`, `pipeline_delete`, `pipeline_create_schedule`, `pipeline_update_schedule`, `pipeline_delete_schedule`, `pipeline_update_definition` |
 | Semantic Model | `semantic_model_create_bim`, `semantic_model_create_tmdl`, `semantic_model_update_details`, `semantic_model_delete`, `semantic_model_update_bim`, `semantic_model_update_tmdl`, `semantic_model_take_over` |
 | Report | `report_create_definition`, `report_update`, `report_delete`, `report_clone`, `report_update_definition`, `report_rebind` |
@@ -124,6 +124,7 @@ WRITABLE_WORKSPACES=*-Dev,*-Test,Sandbox*
 | ML Experiment | `ml_experiment_create`, `ml_experiment_update`, `ml_experiment_delete` |
 | Copy Job | `copy_job_create`, `copy_job_update`, `copy_job_delete`, `copy_job_update_definition` |
 | External Data Share | `external_data_share_create`, `external_data_share_revoke` |
+| Environment | `environment_create`, `environment_update`, `environment_update_definition`, `environment_delete`, `environment_publish`, `environment_cancel_publish`, `environment_import_staging_external_libraries`, `environment_upload_staging_custom_library`, `environment_delete_staging_custom_library`, `environment_remove_staging_external_library`, `environment_update_staging_spark_compute` |
 
 **Not guarded:** Read operations (list, get, get_definition, get_bim, get_tmdl), query execution (DAX, KQL, SQL, GraphQL), run/refresh/cancel operations, export operations, and deployment pipeline CRUD (tenant-level, not workspace-scoped).
 
@@ -214,6 +215,18 @@ Get-Content "$env:APPDATA\Claude\logs\mcp-server-fabric.log" -Wait
 
 The `x-ms-request-id` value logged with every API error is the key identifier needed when opening a support case with Microsoft for Fabric API issues.
 
+### Read vs Write Tool Annotations
+
+Every tool declares MCP [`ToolAnnotations`](https://modelcontextprotocol.io/specification/server/tools#annotations) so MCP clients can distinguish read-only tools from mutations when presenting them in a configuration UI. This lets users enable all read tools in a single toggle while requiring explicit approval for writes.
+
+| Annotation | Meaning | Typical tool names |
+|------------|---------|--------------------|
+| `readOnlyHint: true` | Pure read, no state change | `*_list`, `*_get`, `*_get_definition`, DAX queries, export operations |
+| `readOnlyHint: false, destructiveHint: false` | Creates or updates state | `*_create`, `*_update`, `*_run`, `*_refresh`, `*_publish`, `*_import`, `*_upload` |
+| `readOnlyHint: false, destructiveHint: true` | Deletes, cancels, or removes | `*_delete`, `*_cancel_run`, `*_remove_*`, `*_revoke`, `*_disconnect`, `*_detach_*` |
+
+All 219 tools carry these hints. The workspace safety guard (`WRITABLE_WORKSPACES`) still applies independently on top of whatever the client permits.
+
 ### File-Based I/O
 
 To avoid large payloads overwhelming MCP clients, definition tools use file paths instead of inline content. The server reads files from disk when sending definitions to Fabric, and writes files to disk when retrieving definitions from Fabric.
@@ -239,6 +252,10 @@ To avoid large payloads overwhelming MCP clients, definition tools use file path
 | `mirrored_database_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
 | `kql_database_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
 | `copy_job_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
+| `environment_create` | `definitionDirectoryPath` (optional) | Directory of environment definition files to seed on create |
+| `environment_update_definition` | `definitionDirectoryPath` | Directory of environment definition files |
+| `environment_import_staging_external_libraries` | `yamlFilePath` | Path to an `environment.yml` file (replaces external library list) |
+| `environment_upload_staging_custom_library` | `libraryFilePath` | Path to `.jar` / `.py` / `.whl` / `.tar.gz` (max 100 MB) |
 
 **Output tools** — the server retrieves definitions from Fabric and writes them to disk:
 
@@ -259,6 +276,9 @@ To avoid large payloads overwhelming MCP clients, definition tools use file path
 | `mirrored_database_get_definition` | `outputDirectoryPath` | Mirrored database definition files |
 | `kql_database_get_definition` | `outputDirectoryPath` | KQL database definition files |
 | `copy_job_get_definition` | `outputDirectoryPath` | Copy job definition files |
+| `environment_get_definition` | `outputDirectoryPath` | Environment definition files |
+| `environment_export_staging_external_libraries` | `outputFilePath` | Staging `environment.yml` |
+| `environment_export_published_external_libraries` | `outputFilePath` | Published `environment.yml` |
 
 **TMDL directory structure example:**
 ```
@@ -284,7 +304,7 @@ npm run dev          # Watch mode
 npm run inspect      # Launch MCP Inspector
 ```
 
-## Tools (197 total)
+## Tools (219 total)
 
 ### Auth (4 tools)
 | Tool | Description |
@@ -335,7 +355,7 @@ npm run inspect      # Launch MCP Inspector
 | `warehouse_get_definition` | Get warehouse definition (LRO). Writes files to `outputDirectoryPath` |
 | `warehouse_update_definition` | Update warehouse definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
 
-### Notebook (10 tools)
+### Notebook (12 tools)
 | Tool | Description |
 |------|-------------|
 | `notebook_list` | List all notebooks in a workspace |
@@ -348,6 +368,8 @@ npm run inspect      # Launch MCP Inspector
 | `notebook_run` | Run a notebook on demand |
 | `notebook_get_run_status` | Get notebook run status |
 | `notebook_cancel_run` | Cancel a running notebook |
+| `notebook_attach_environment` | Attach a Fabric Environment to a notebook by mutating its definition metadata (handles both `.py` and `.ipynb` notebooks) |
+| `notebook_detach_environment` | Remove the attached environment from a notebook |
 
 ### Pipeline (15 tools)
 | Tool | Description |
@@ -574,6 +596,33 @@ npm run inspect      # Launch MCP Inspector
 | `external_data_share_get` | Get details of a specific external data share |
 | `external_data_share_create` | Create a new external data share for an item |
 | `external_data_share_revoke` | Revoke an external data share |
+
+### Environment (20 tools)
+
+Fabric Environments are the attachable runtime unit for notebooks and Spark job definitions — they bundle a runtime version, a Spark compute configuration, and a set of libraries. Tools cover the full CRUD surface plus the staging/publish lifecycle.
+
+| Tool | Description |
+|------|-------------|
+| `environment_list` | List all environments in a workspace |
+| `environment_get` | Get environment metadata including publish state |
+| `environment_create` | Create a new environment (optionally seeded with a definition from `definitionDirectoryPath`) |
+| `environment_update` | Update environment display name or description |
+| `environment_delete` | Delete an environment |
+| `environment_get_definition` | Get the environment public definition (LRO). Writes files to `outputDirectoryPath` |
+| `environment_update_definition` | Override the environment public definition (LRO). Reads from `definitionDirectoryPath` |
+| `environment_publish` | Trigger a publish to make staging changes effective (LRO) |
+| `environment_cancel_publish` | Cancel an ongoing publish operation |
+| `environment_list_staging_libraries` | List staging libraries (published + pending) |
+| `environment_export_staging_external_libraries` | Export staging external libraries as `environment.yml` to `outputFilePath` |
+| `environment_import_staging_external_libraries` | Upload `environment.yml` from `yamlFilePath` to replace the external library list |
+| `environment_upload_staging_custom_library` | Upload a `.jar` / `.py` / `.whl` / `.tar.gz` from `libraryFilePath` (max 100 MB) |
+| `environment_delete_staging_custom_library` | Delete a custom library from staging by filename |
+| `environment_remove_staging_external_library` | Remove a single external library from staging (one at a time) |
+| `environment_get_staging_spark_compute` | Get the staging Spark compute configuration |
+| `environment_update_staging_spark_compute` | Update staging Spark compute (pool, cores, memory, runtime, sparkProperties) |
+| `environment_list_published_libraries` | List published (currently effective) libraries |
+| `environment_get_published_spark_compute` | Get published Spark compute configuration |
+| `environment_export_published_external_libraries` | Export published external libraries as `environment.yml` to `outputFilePath` |
 
 ## License
 

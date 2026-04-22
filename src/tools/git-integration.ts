@@ -5,11 +5,16 @@ import { formatToolError } from "../core/errors.js";
 import { pollOperation } from "../core/lro.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerGitIntegrationTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "git_get_connection",
     "Get the Git connection details for a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/git/connection`);
@@ -24,6 +29,7 @@ export function registerGitIntegrationTools(server: McpServer, fabricClient: Fab
     "git_get_status",
     "Get the Git status of items in a workspace (shows sync state between workspace and remote)",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/git/status`);
@@ -48,6 +54,7 @@ export function registerGitIntegrationTools(server: McpServer, fabricClient: Fab
         directoryName: z.string().optional().describe("Directory path within the repository"),
       }).describe("Git provider connection details"),
     },
+    WRITE,
     async ({ workspaceId, gitProviderDetails }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -63,6 +70,7 @@ export function registerGitIntegrationTools(server: McpServer, fabricClient: Fab
     "git_disconnect",
     "Disconnect a workspace from its Git repository",
     { workspaceId: z.string().describe("The workspace ID") },
+    DESTRUCTIVE,
     async ({ workspaceId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -81,6 +89,7 @@ export function registerGitIntegrationTools(server: McpServer, fabricClient: Fab
       workspaceId: z.string().describe("The workspace ID"),
       initializationStrategy: z.enum(["PreferWorkspace", "PreferRemote"]).describe("Strategy for resolving conflicts during initialization"),
     },
+    WRITE,
     async ({ workspaceId, initializationStrategy }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -109,6 +118,7 @@ export function registerGitIntegrationTools(server: McpServer, fabricClient: Fab
       })).optional().describe("Items to commit (required when mode is Selective)"),
       workspaceHead: z.string().optional().describe("Workspace head object ID for concurrency control"),
     },
+    WRITE,
     async ({ workspaceId, mode, comment, items, workspaceHead }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -143,6 +153,7 @@ export function registerGitIntegrationTools(server: McpServer, fabricClient: Fab
         allowOverrideItems: z.boolean().optional().describe("Allow overriding workspace items"),
       }).optional().describe("Update options"),
     },
+    WRITE,
     async ({ workspaceId, remoteCommitHash, conflictResolution, workspaceHead, options }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -166,6 +177,7 @@ export function registerGitIntegrationTools(server: McpServer, fabricClient: Fab
     "git_get_credentials",
     "Get the Git credentials configuration for the current user in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/git/myGitCredentials`);
@@ -184,6 +196,7 @@ export function registerGitIntegrationTools(server: McpServer, fabricClient: Fab
       source: z.enum(["Automatic", "None", "ConfiguredConnection"]).describe("Credential source type"),
       connectionId: z.string().optional().describe("Connection ID (required when source is ConfiguredConnection)"),
     },
+    WRITE,
     async ({ workspaceId, source, connectionId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);

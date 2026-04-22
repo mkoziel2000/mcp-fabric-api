@@ -15,11 +15,16 @@ function isSchemaEnabledError(error: unknown): boolean {
     error.errorCode === "UnsupportedOperationForSchemasEnabledLakehouse";
 }
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerLakehouseTools(server: McpServer, fabricClient: FabricClient, sqlClient: SqlClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "lakehouse_list",
     "List all lakehouses in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const lakehouses = await paginateAll(fabricClient, `/workspaces/${workspaceId}/lakehouses`);
@@ -37,6 +42,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
       workspaceId: z.string().describe("The workspace ID"),
       lakehouseId: z.string().describe("The lakehouse ID"),
     },
+    READ,
     async ({ workspaceId, lakehouseId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/lakehouses/${lakehouseId}`);
@@ -56,6 +62,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
       description: z.string().optional().describe("Description of the lakehouse"),
       enableSchemas: z.boolean().default(true).describe("Create a schema-enabled lakehouse (preview). Defaults to true. Set to false for a classic lakehouse without schema support."),
     },
+    WRITE,
     async ({ workspaceId, displayName, description, enableSchemas }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -83,6 +90,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, lakehouseId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -104,6 +112,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
       workspaceId: z.string().describe("The workspace ID"),
       lakehouseId: z.string().describe("The lakehouse ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, lakehouseId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -122,6 +131,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
       workspaceId: z.string().describe("The workspace ID"),
       lakehouseId: z.string().describe("The lakehouse ID"),
     },
+    READ,
     async ({ workspaceId, lakehouseId }) => {
       try {
         const tables = await paginateAll(fabricClient, `/workspaces/${workspaceId}/lakehouses/${lakehouseId}/tables`, "data");
@@ -183,6 +193,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
         delimiter: z.string().optional().describe("CSV delimiter character"),
       }).optional().describe("Format options for the source file"),
     },
+    WRITE,
     async ({ workspaceId, lakehouseId, tableName, relativePath, pathType, mode, formatOptions }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -275,6 +286,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
         }).optional().describe("Target a OneDrive for Business or SharePoint Online location"),
       }).describe("Target datasource — specify exactly one: oneLake, adlsGen2, amazonS3, googleCloudStorage, s3Compatible, dataverse, azureBlobStorage, or oneDriveSharePoint"),
     },
+    WRITE,
     async ({ workspaceId, lakehouseId, name, path, shortcutConflictPolicy, target }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -310,6 +322,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
       workspaceId: z.string().describe("The workspace ID"),
       lakehouseId: z.string().describe("The lakehouse ID"),
     },
+    READ,
     async ({ workspaceId, lakehouseId }) => {
       try {
         const response = await fabricClient.get<Record<string, unknown>>(`/workspaces/${workspaceId}/lakehouses/${lakehouseId}`);
@@ -333,6 +346,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
       lakehouseId: z.string().describe("The lakehouse ID"),
       outputDirectoryPath: z.string().describe("Directory path where definition files will be written"),
     },
+    READ,
     async ({ workspaceId, lakehouseId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -377,6 +391,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
       })).optional().describe("Array of definition parts to upload"),
       partsDirectoryPath: z.string().optional().describe("Path to a directory containing definition files"),
     },
+    WRITE,
     async ({ workspaceId, lakehouseId, parts, partsDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -412,6 +427,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
       workspaceId: z.string().describe("The workspace ID"),
       lakehouseId: z.string().describe("The lakehouse ID"),
     },
+    READ,
     async ({ workspaceId, lakehouseId }) => {
       try {
         const shortcuts = await paginateAll(fabricClient, `/workspaces/${workspaceId}/items/${lakehouseId}/shortcuts`);
@@ -431,6 +447,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
       shortcutPath: z.string().describe("The shortcut path (e.g., 'Tables' or 'Files/landingZone')"),
       shortcutName: z.string().describe("The shortcut name"),
     },
+    READ,
     async ({ workspaceId, lakehouseId, shortcutPath, shortcutName }) => {
       try {
         const response = await fabricClient.get(
@@ -452,6 +469,7 @@ export function registerLakehouseTools(server: McpServer, fabricClient: FabricCl
       shortcutPath: z.string().describe("The shortcut path (e.g., 'Tables' or 'Files/landingZone')"),
       shortcutName: z.string().describe("The shortcut name"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, lakehouseId, shortcutPath, shortcutName }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);

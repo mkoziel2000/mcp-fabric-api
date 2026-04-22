@@ -9,11 +9,16 @@ import { decodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { writeFilesToDirectory } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricClient, powerBIClient: PowerBIClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "graphql_api_list",
     "List all GraphQL API items in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const items = await paginateAll(fabricClient, `/workspaces/${workspaceId}/graphQLApis`);
@@ -31,6 +36,7 @@ export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricC
       workspaceId: z.string().describe("The workspace ID"),
       graphqlApiId: z.string().describe("The GraphQL API ID"),
     },
+    READ,
     async ({ workspaceId, graphqlApiId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/graphQLApis/${graphqlApiId}`);
@@ -49,6 +55,7 @@ export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricC
       displayName: z.string().describe("Display name for the GraphQL API"),
       description: z.string().optional().describe("Description of the GraphQL API"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -76,6 +83,7 @@ export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricC
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, graphqlApiId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -97,6 +105,7 @@ export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricC
       workspaceId: z.string().describe("The workspace ID"),
       graphqlApiId: z.string().describe("The GraphQL API ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, graphqlApiId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -116,6 +125,7 @@ export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricC
       graphqlApiId: z.string().describe("The GraphQL API ID"),
       outputDirectoryPath: z.string().describe("Directory path where GraphQL definition files will be written"),
     },
+    READ,
     async ({ workspaceId, graphqlApiId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -157,6 +167,7 @@ export function registerGraphQLApiTools(server: McpServer, fabricClient: FabricC
       query: z.string().describe("The GraphQL query string"),
       variables: z.record(z.unknown()).optional().describe("GraphQL query variables"),
     },
+    WRITE,
     async ({ workspaceId, graphqlApiId, query, variables }) => {
       try {
         const body: Record<string, unknown> = { query };

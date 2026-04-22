@@ -9,11 +9,16 @@ import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 import type { FileEntry } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerReflexTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "reflex_list",
     "List all Reflex (Activator) items in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const items = await paginateAll(fabricClient, `/workspaces/${workspaceId}/items?type=Reflex`);
@@ -31,6 +36,7 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
       workspaceId: z.string().describe("The workspace ID"),
       reflexId: z.string().describe("The reflex/activator ID"),
     },
+    READ,
     async ({ workspaceId, reflexId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/items/${reflexId}`);
@@ -49,6 +55,7 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
       displayName: z.string().describe("Display name for the reflex"),
       description: z.string().optional().describe("Description of the reflex"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -71,6 +78,7 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, reflexId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -92,6 +100,7 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
       workspaceId: z.string().describe("The workspace ID"),
       reflexId: z.string().describe("The reflex/activator ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, reflexId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -111,6 +120,7 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
       reflexId: z.string().describe("The reflex/activator ID"),
       outputDirectoryPath: z.string().describe("Directory path where Reflex definition files will be written"),
     },
+    READ,
     async ({ workspaceId, reflexId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -155,6 +165,7 @@ export function registerReflexTools(server: McpServer, fabricClient: FabricClien
       })).optional().describe("Array of definition parts to upload"),
       partsDirectoryPath: z.string().optional().describe("Path to a directory containing definition files"),
     },
+    WRITE,
     async ({ workspaceId, reflexId, parts, partsDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);

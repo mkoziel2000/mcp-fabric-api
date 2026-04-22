@@ -5,11 +5,16 @@ import { SqlClient } from "../client/sql-client.js";
 import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerSqlEndpointTools(server: McpServer, fabricClient: FabricClient, sqlClient: SqlClient) {
   server.tool(
     "sql_endpoint_list",
     "List all SQL endpoints in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const endpoints = await paginateAll(fabricClient, `/workspaces/${workspaceId}/sqlEndpoints`);
@@ -27,6 +32,7 @@ export function registerSqlEndpointTools(server: McpServer, fabricClient: Fabric
       workspaceId: z.string().describe("The workspace ID"),
       sqlEndpointId: z.string().describe("The SQL endpoint ID"),
     },
+    READ,
     async ({ workspaceId, sqlEndpointId }) => {
       try {
         const response = await fabricClient.get<Record<string, unknown>>(
@@ -46,6 +52,7 @@ export function registerSqlEndpointTools(server: McpServer, fabricClient: Fabric
       workspaceId: z.string().describe("The workspace ID"),
       sqlEndpointId: z.string().describe("The SQL endpoint ID"),
     },
+    READ,
     async ({ workspaceId, sqlEndpointId }) => {
       try {
         const response = await fabricClient.get<Record<string, unknown>>(
@@ -74,6 +81,7 @@ export function registerSqlEndpointTools(server: McpServer, fabricClient: Fabric
       database: z.string().optional().describe("Database name (defaults to the item's display name)"),
       maxRows: z.number().optional().describe("Maximum rows to return (default: 1000)"),
     },
+    WRITE,
     async ({ query, workspaceId, itemId, itemType, database, maxRows }) => {
       try {
         let connectionString: string | undefined;

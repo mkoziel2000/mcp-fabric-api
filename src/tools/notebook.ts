@@ -9,11 +9,108 @@ import { decodeBase64, encodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { readFilesFromDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
+type DefPart = { path: string; payload: string; payloadType: string };
+type Dependencies = Record<string, unknown> & {
+  environment?: { environmentId: string; workspaceId: string };
+};
+
+async function fetchNotebookDefinitionParts(
+  fabricClient: FabricClient,
+  workspaceId: string,
+  notebookId: string
+): Promise<DefPart[]> {
+  const response = await fabricClient.post<Record<string, unknown>>(
+    `/workspaces/${workspaceId}/notebooks/${notebookId}/getDefinition`
+  );
+  if (response.lro) {
+    await pollOperation(fabricClient, response.lro.operationId);
+    const result = await getOperationResult<Record<string, unknown>>(
+      fabricClient,
+      response.lro.operationId
+    );
+    const def = result?.definition as { parts?: DefPart[] } | undefined;
+    if (def?.parts) return def.parts;
+  }
+  const def = response.data?.definition as { parts?: DefPart[] } | undefined;
+  if (def?.parts) return def.parts;
+  throw new Error("No definition returned from Fabric API");
+}
+
+function rewriteIpynbDependencies(
+  content: string,
+  mutate: (deps: Dependencies) => void
+): string {
+  const nb = JSON.parse(content) as { metadata?: { dependencies?: Dependencies } };
+  nb.metadata = nb.metadata ?? {};
+  nb.metadata.dependencies = nb.metadata.dependencies ?? {};
+  mutate(nb.metadata.dependencies);
+  return JSON.stringify(nb, null, 2);
+}
+
+// Fabric .py notebooks wrap a JSON metadata block in `# META ` comment lines.
+function rewritePyDependencies(
+  content: string,
+  mutate: (deps: Dependencies) => void
+): string {
+  const lines = content.split(/\r?\n/);
+  const start = lines.findIndex((l) => /^# META \{/.test(l));
+  if (start === -1) throw new Error("Notebook .py has no `# META` metadata block");
+  let end = start;
+  while (end < lines.length && /^# META(\s|$)/.test(lines[end])) end++;
+  const jsonStr = lines
+    .slice(start, end)
+    .map((l) => l.replace(/^# META ?/, ""))
+    .join("\n");
+  const meta = JSON.parse(jsonStr) as { dependencies?: Dependencies };
+  meta.dependencies = meta.dependencies ?? {};
+  mutate(meta.dependencies);
+  const newJson = JSON.stringify(meta, null, 2)
+    .split("\n")
+    .map((l) => (l.length === 0 ? "# META" : `# META ${l}`));
+  return [...lines.slice(0, start), ...newJson, ...lines.slice(end)].join("\n");
+}
+
+async function updateNotebookDependencies(
+  fabricClient: FabricClient,
+  workspaceId: string,
+  notebookId: string,
+  mutate: (deps: Dependencies) => void
+): Promise<void> {
+  const parts = await fetchNotebookDefinitionParts(fabricClient, workspaceId, notebookId);
+  const idx = parts.findIndex(
+    (p) => p.path.endsWith("notebook-content.py") || p.path.endsWith("notebook-content.ipynb")
+  );
+  if (idx === -1) throw new Error("No notebook-content part found in definition");
+  const part = parts[idx];
+  const raw =
+    part.payloadType === "InlineBase64" ? decodeBase64(part.payload) : part.payload;
+  const rewritten = part.path.endsWith(".ipynb")
+    ? rewriteIpynbDependencies(raw, mutate)
+    : rewritePyDependencies(raw, mutate);
+  parts[idx] = {
+    path: part.path,
+    payload: encodeBase64(rewritten),
+    payloadType: "InlineBase64",
+  };
+  const response = await fabricClient.post(
+    `/workspaces/${workspaceId}/notebooks/${notebookId}/updateDefinition`,
+    { definition: { parts } }
+  );
+  if (response.lro) {
+    await pollOperation(fabricClient, response.lro.operationId);
+  }
+}
+
 export function registerNotebookTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "notebook_list",
     "List all notebooks in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const notebooks = await paginateAll(fabricClient, `/workspaces/${workspaceId}/notebooks`);
@@ -31,6 +128,7 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
       workspaceId: z.string().describe("The workspace ID"),
       notebookId: z.string().describe("The notebook ID"),
     },
+    READ,
     async ({ workspaceId, notebookId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/notebooks/${notebookId}`);
@@ -49,6 +147,7 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
       displayName: z.string().describe("Display name for the notebook"),
       description: z.string().optional().describe("Description of the notebook"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -76,6 +175,7 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, notebookId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -97,6 +197,7 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
       workspaceId: z.string().describe("The workspace ID"),
       notebookId: z.string().describe("The notebook ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, notebookId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -116,6 +217,7 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
       notebookId: z.string().describe("The notebook ID"),
       outputDirectoryPath: z.string().describe("Directory path where notebook definition files will be written"),
     },
+    READ,
     async ({ workspaceId, notebookId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -156,6 +258,7 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
       notebookId: z.string().describe("The notebook ID"),
       definitionDirectoryPath: z.string().describe("Path to a directory containing notebook definition files"),
     },
+    WRITE,
     async ({ workspaceId, notebookId, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -192,6 +295,7 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
       notebookId: z.string().describe("The notebook ID"),
       parameters: z.record(z.unknown()).optional().describe("Notebook parameters as key-value pairs"),
     },
+    WRITE,
     async ({ workspaceId, notebookId, parameters }) => {
       try {
         const executionData = parameters ? { parameters } : undefined;
@@ -211,6 +315,7 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
       notebookId: z.string().describe("The notebook ID"),
       jobInstanceId: z.string().describe("The job instance ID from notebook_run"),
     },
+    READ,
     async ({ workspaceId, notebookId, jobInstanceId }) => {
       try {
         const job = await getJobInstance(fabricClient, workspaceId, notebookId, jobInstanceId);
@@ -229,10 +334,68 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
       notebookId: z.string().describe("The notebook ID"),
       jobInstanceId: z.string().describe("The job instance ID to cancel"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, notebookId, jobInstanceId }) => {
       try {
         await cancelJobInstance(fabricClient, workspaceId, notebookId, jobInstanceId);
         return { content: [{ type: "text", text: `Notebook run ${jobInstanceId} cancelled successfully` }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "notebook_attach_environment",
+    "Attach a Fabric Environment to a notebook so it uses that environment's compute/libraries. Mutates the notebook definition metadata (no local files involved).",
+    {
+      workspaceId: z.string().describe("The workspace ID where the notebook lives"),
+      notebookId: z.string().describe("The notebook ID"),
+      environmentId: z.string().describe("The environment ID to attach"),
+      environmentWorkspaceId: z
+        .string()
+        .optional()
+        .describe("Workspace ID of the environment (defaults to the notebook's workspaceId)"),
+    },
+    WRITE,
+    async ({ workspaceId, notebookId, environmentId, environmentWorkspaceId }) => {
+      try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        const envWs = environmentWorkspaceId ?? workspaceId;
+        await updateNotebookDependencies(fabricClient, workspaceId, notebookId, (deps) => {
+          deps.environment = { environmentId, workspaceId: envWs };
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Environment ${environmentId} (workspace ${envWs}) attached to notebook ${notebookId}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "notebook_detach_environment",
+    "Remove the attached environment from a notebook by deleting the environment binding from its definition metadata.",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      notebookId: z.string().describe("The notebook ID"),
+    },
+    DESTRUCTIVE,
+    async ({ workspaceId, notebookId }) => {
+      try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        await updateNotebookDependencies(fabricClient, workspaceId, notebookId, (deps) => {
+          delete deps.environment;
+        });
+        return {
+          content: [{ type: "text", text: `Environment detached from notebook ${notebookId}` }],
+        };
       } catch (error) {
         return formatToolError(error);
       }

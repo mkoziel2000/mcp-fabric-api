@@ -25,6 +25,7 @@ import { registerMlModelTools } from "./tools/ml-model.js";
 import { registerMlExperimentTools } from "./tools/ml-experiment.js";
 import { registerCopyJobTools } from "./tools/copy-job.js";
 import { registerExternalDataShareTools } from "./tools/external-data-share.js";
+import { registerEnvironmentTools } from "./tools/environment.js";
 import { SqlClient } from "./client/sql-client.js";
 import { KustoClient } from "./client/kusto-client.js";
 import { WorkspaceGuard } from "./core/workspace-guard.js";
@@ -36,7 +37,7 @@ export interface CreateServerOptions {
 export function createServer(options?: CreateServerOptions): McpServer {
   const server = new McpServer({
     name: "mcp-fabric-api",
-    version: "2.5.0",
+    version: "2.7.0",
   });
 
   const tokenManager = options?.tokenManager ?? new TokenManager();
@@ -69,6 +70,7 @@ export function createServer(options?: CreateServerOptions): McpServer {
   registerMlExperimentTools(server, fabricClient, workspaceGuard);
   registerCopyJobTools(server, fabricClient, workspaceGuard);
   registerExternalDataShareTools(server, fabricClient, workspaceGuard);
+  registerEnvironmentTools(server, fabricClient, workspaceGuard);
   registerAuthTools(server, tokenManager);
 
   return server;

@@ -9,11 +9,16 @@ import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 import type { FileEntry } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerKqlDatabaseTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "kql_database_list",
     "List all KQL databases in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const items = await paginateAll(fabricClient, `/workspaces/${workspaceId}/kqlDatabases`);
@@ -31,6 +36,7 @@ export function registerKqlDatabaseTools(server: McpServer, fabricClient: Fabric
       workspaceId: z.string().describe("The workspace ID"),
       kqlDatabaseId: z.string().describe("The KQL database ID"),
     },
+    READ,
     async ({ workspaceId, kqlDatabaseId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/kqlDatabases/${kqlDatabaseId}`);
@@ -51,6 +57,7 @@ export function registerKqlDatabaseTools(server: McpServer, fabricClient: Fabric
       databaseType: z.enum(["ReadWrite", "ReadOnlyShortcut"]).describe("Database type"),
       parentEventhouseItemId: z.string().describe("Parent eventhouse item ID"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description, databaseType, parentEventhouseItemId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -81,6 +88,7 @@ export function registerKqlDatabaseTools(server: McpServer, fabricClient: Fabric
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, kqlDatabaseId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -102,6 +110,7 @@ export function registerKqlDatabaseTools(server: McpServer, fabricClient: Fabric
       workspaceId: z.string().describe("The workspace ID"),
       kqlDatabaseId: z.string().describe("The KQL database ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, kqlDatabaseId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -121,6 +130,7 @@ export function registerKqlDatabaseTools(server: McpServer, fabricClient: Fabric
       kqlDatabaseId: z.string().describe("The KQL database ID"),
       outputDirectoryPath: z.string().describe("Directory path where definition files will be written"),
     },
+    READ,
     async ({ workspaceId, kqlDatabaseId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -165,6 +175,7 @@ export function registerKqlDatabaseTools(server: McpServer, fabricClient: Fabric
       })).optional().describe("Array of definition parts to upload"),
       partsDirectoryPath: z.string().optional().describe("Path to a directory containing definition files"),
     },
+    WRITE,
     async ({ workspaceId, kqlDatabaseId, parts, partsDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);

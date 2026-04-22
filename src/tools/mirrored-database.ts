@@ -9,11 +9,16 @@ import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 import type { FileEntry } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerMirroredDatabaseTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "mirrored_database_list",
     "List all mirrored databases in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const items = await paginateAll(fabricClient, `/workspaces/${workspaceId}/mirroredDatabases`);
@@ -31,6 +36,7 @@ export function registerMirroredDatabaseTools(server: McpServer, fabricClient: F
       workspaceId: z.string().describe("The workspace ID"),
       mirroredDatabaseId: z.string().describe("The mirrored database ID"),
     },
+    READ,
     async ({ workspaceId, mirroredDatabaseId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/mirroredDatabases/${mirroredDatabaseId}`);
@@ -49,6 +55,7 @@ export function registerMirroredDatabaseTools(server: McpServer, fabricClient: F
       displayName: z.string().describe("Display name for the mirrored database"),
       description: z.string().optional().describe("Description of the mirrored database"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -76,6 +83,7 @@ export function registerMirroredDatabaseTools(server: McpServer, fabricClient: F
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, mirroredDatabaseId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -97,6 +105,7 @@ export function registerMirroredDatabaseTools(server: McpServer, fabricClient: F
       workspaceId: z.string().describe("The workspace ID"),
       mirroredDatabaseId: z.string().describe("The mirrored database ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, mirroredDatabaseId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -116,6 +125,7 @@ export function registerMirroredDatabaseTools(server: McpServer, fabricClient: F
       mirroredDatabaseId: z.string().describe("The mirrored database ID"),
       outputDirectoryPath: z.string().describe("Directory path where definition files will be written"),
     },
+    READ,
     async ({ workspaceId, mirroredDatabaseId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -160,6 +170,7 @@ export function registerMirroredDatabaseTools(server: McpServer, fabricClient: F
       })).optional().describe("Array of definition parts to upload"),
       partsDirectoryPath: z.string().optional().describe("Path to a directory containing definition files"),
     },
+    WRITE,
     async ({ workspaceId, mirroredDatabaseId, parts, partsDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -195,6 +206,7 @@ export function registerMirroredDatabaseTools(server: McpServer, fabricClient: F
       workspaceId: z.string().describe("The workspace ID"),
       mirroredDatabaseId: z.string().describe("The mirrored database ID"),
     },
+    WRITE,
     async ({ workspaceId, mirroredDatabaseId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -213,6 +225,7 @@ export function registerMirroredDatabaseTools(server: McpServer, fabricClient: F
       workspaceId: z.string().describe("The workspace ID"),
       mirroredDatabaseId: z.string().describe("The mirrored database ID"),
     },
+    WRITE,
     async ({ workspaceId, mirroredDatabaseId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -231,6 +244,7 @@ export function registerMirroredDatabaseTools(server: McpServer, fabricClient: F
       workspaceId: z.string().describe("The workspace ID"),
       mirroredDatabaseId: z.string().describe("The mirrored database ID"),
     },
+    READ,
     async ({ workspaceId, mirroredDatabaseId }) => {
       try {
         const response = await fabricClient.get(
@@ -250,6 +264,7 @@ export function registerMirroredDatabaseTools(server: McpServer, fabricClient: F
       workspaceId: z.string().describe("The workspace ID"),
       mirroredDatabaseId: z.string().describe("The mirrored database ID"),
     },
+    READ,
     async ({ workspaceId, mirroredDatabaseId }) => {
       try {
         const response = await fabricClient.get(

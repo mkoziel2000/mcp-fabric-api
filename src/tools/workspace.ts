@@ -5,11 +5,16 @@ import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerWorkspaceTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "workspace_list",
     "List all accessible Fabric workspaces",
     {},
+    READ,
     async () => {
       try {
         const workspaces = await paginateAll(fabricClient, "/workspaces");
@@ -24,6 +29,7 @@ export function registerWorkspaceTools(server: McpServer, fabricClient: FabricCl
     "workspace_get",
     "Get details of a specific workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}`);
@@ -42,6 +48,7 @@ export function registerWorkspaceTools(server: McpServer, fabricClient: FabricCl
       description: z.string().optional().describe("Description of the workspace"),
       capacityId: z.string().optional().describe("Capacity ID to assign"),
     },
+    WRITE,
     async ({ displayName, description, capacityId }) => {
       try {
         const body: Record<string, unknown> = { displayName };
@@ -63,6 +70,7 @@ export function registerWorkspaceTools(server: McpServer, fabricClient: FabricCl
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -81,6 +89,7 @@ export function registerWorkspaceTools(server: McpServer, fabricClient: FabricCl
     "workspace_delete",
     "Delete a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    DESTRUCTIVE,
     async ({ workspaceId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -99,6 +108,7 @@ export function registerWorkspaceTools(server: McpServer, fabricClient: FabricCl
       workspaceId: z.string().describe("The workspace ID"),
       type: z.string().optional().describe("Filter by item type (e.g., Lakehouse, Notebook, Pipeline)"),
     },
+    READ,
     async ({ workspaceId, type }) => {
       try {
         let path = `/workspaces/${workspaceId}/items`;

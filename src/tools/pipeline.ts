@@ -9,11 +9,16 @@ import { runOnDemandJob, getJobInstance, cancelJobInstance, listJobInstances } f
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { readFilesFromDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerPipelineTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "pipeline_list",
     "List all data pipelines in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const pipelines = await paginateAll(fabricClient, `/workspaces/${workspaceId}/dataPipelines`);
@@ -31,6 +36,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       workspaceId: z.string().describe("The workspace ID"),
       pipelineId: z.string().describe("The pipeline ID"),
     },
+    READ,
     async ({ workspaceId, pipelineId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/dataPipelines/${pipelineId}`);
@@ -49,6 +55,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       displayName: z.string().describe("Display name for the pipeline"),
       description: z.string().optional().describe("Description of the pipeline"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -76,6 +83,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, pipelineId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -97,6 +105,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       workspaceId: z.string().describe("The workspace ID"),
       pipelineId: z.string().describe("The pipeline ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, pipelineId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -116,6 +125,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       pipelineId: z.string().describe("The pipeline ID"),
       parameters: z.record(z.unknown()).optional().describe("Pipeline parameters as key-value pairs"),
     },
+    WRITE,
     async ({ workspaceId, pipelineId, parameters }) => {
       try {
         const executionData = parameters ? { parameters } : undefined;
@@ -135,6 +145,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       pipelineId: z.string().describe("The pipeline ID"),
       jobInstanceId: z.string().describe("The job instance ID from pipeline_run"),
     },
+    READ,
     async ({ workspaceId, pipelineId, jobInstanceId }) => {
       try {
         const job = await getJobInstance(fabricClient, workspaceId, pipelineId, jobInstanceId);
@@ -153,6 +164,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       pipelineId: z.string().describe("The pipeline ID"),
       jobInstanceId: z.string().describe("The job instance ID to cancel"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, pipelineId, jobInstanceId }) => {
       try {
         await cancelJobInstance(fabricClient, workspaceId, pipelineId, jobInstanceId);
@@ -170,6 +182,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       workspaceId: z.string().describe("The workspace ID"),
       pipelineId: z.string().describe("The pipeline ID"),
     },
+    READ,
     async ({ workspaceId, pipelineId }) => {
       try {
         const jobs = await listJobInstances(fabricClient, workspaceId, pipelineId);
@@ -188,6 +201,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       workspaceId: z.string().describe("The workspace ID"),
       pipelineId: z.string().describe("The pipeline ID"),
     },
+    READ,
     async ({ workspaceId, pipelineId }) => {
       try {
         const response = await fabricClient.get(
@@ -215,6 +229,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       times: z.array(z.string()).optional().describe("Times of day for the schedule (HH:mm format)"),
       enabled: z.boolean().optional().describe("Whether the schedule is enabled (default: true)"),
     },
+    WRITE,
     async ({ workspaceId, pipelineId, startDateTime, endDateTime, localTimeZoneId, type, interval, weekDays, times, enabled }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -250,6 +265,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       enabled: z.boolean().optional().describe("Whether the schedule is enabled"),
       configuration: z.record(z.unknown()).optional().describe("Updated schedule configuration"),
     },
+    WRITE,
     async ({ workspaceId, pipelineId, scheduleId, enabled, configuration }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -275,6 +291,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       pipelineId: z.string().describe("The pipeline ID"),
       scheduleId: z.string().describe("The schedule ID to delete"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, pipelineId, scheduleId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -296,6 +313,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       pipelineId: z.string().describe("The pipeline ID"),
       outputDirectoryPath: z.string().describe("Directory path where definition files will be written"),
     },
+    READ,
     async ({ workspaceId, pipelineId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -336,6 +354,7 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
       pipelineId: z.string().describe("The pipeline ID"),
       definitionDirectoryPath: z.string().describe("Path to a directory containing pipeline definition files"),
     },
+    WRITE,
     async ({ workspaceId, pipelineId, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);

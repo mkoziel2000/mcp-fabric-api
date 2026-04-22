@@ -5,6 +5,10 @@ import { formatToolError } from "../core/errors.js";
 import { paginateAll } from "../core/pagination.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerExternalDataShareTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "external_data_share_list",
@@ -13,6 +17,7 @@ export function registerExternalDataShareTools(server: McpServer, fabricClient: 
       workspaceId: z.string().describe("The workspace ID"),
       itemId: z.string().describe("The item ID"),
     },
+    READ,
     async ({ workspaceId, itemId }) => {
       try {
         const shares = await paginateAll(fabricClient, `/workspaces/${workspaceId}/items/${itemId}/externalDataShares`);
@@ -31,6 +36,7 @@ export function registerExternalDataShareTools(server: McpServer, fabricClient: 
       itemId: z.string().describe("The item ID"),
       externalDataShareId: z.string().describe("The external data share ID"),
     },
+    READ,
     async ({ workspaceId, itemId, externalDataShareId }) => {
       try {
         const response = await fabricClient.get(
@@ -52,6 +58,7 @@ export function registerExternalDataShareTools(server: McpServer, fabricClient: 
       paths: z.array(z.string()).describe("Array of paths to share externally"),
       recipientUserPrincipalName: z.string().describe("User principal name of the recipient (email)"),
     },
+    WRITE,
     async ({ workspaceId, itemId, paths, recipientUserPrincipalName }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -75,6 +82,7 @@ export function registerExternalDataShareTools(server: McpServer, fabricClient: 
       itemId: z.string().describe("The item ID"),
       externalDataShareId: z.string().describe("The external data share ID to revoke"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, itemId, externalDataShareId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);

@@ -10,11 +10,16 @@ import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 import type { FileEntry } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerCopyJobTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "copy_job_list",
     "List all copy jobs in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const items = await paginateAll(fabricClient, `/workspaces/${workspaceId}/items?type=CopyJob`);
@@ -32,6 +37,7 @@ export function registerCopyJobTools(server: McpServer, fabricClient: FabricClie
       workspaceId: z.string().describe("The workspace ID"),
       copyJobId: z.string().describe("The copy job ID"),
     },
+    READ,
     async ({ workspaceId, copyJobId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/items/${copyJobId}`);
@@ -50,6 +56,7 @@ export function registerCopyJobTools(server: McpServer, fabricClient: FabricClie
       displayName: z.string().describe("Display name for the copy job"),
       description: z.string().optional().describe("Description of the copy job"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -72,6 +79,7 @@ export function registerCopyJobTools(server: McpServer, fabricClient: FabricClie
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, copyJobId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -93,6 +101,7 @@ export function registerCopyJobTools(server: McpServer, fabricClient: FabricClie
       workspaceId: z.string().describe("The workspace ID"),
       copyJobId: z.string().describe("The copy job ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, copyJobId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -112,6 +121,7 @@ export function registerCopyJobTools(server: McpServer, fabricClient: FabricClie
       copyJobId: z.string().describe("The copy job ID"),
       outputDirectoryPath: z.string().describe("Directory path where definition files will be written"),
     },
+    READ,
     async ({ workspaceId, copyJobId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -156,6 +166,7 @@ export function registerCopyJobTools(server: McpServer, fabricClient: FabricClie
       })).optional().describe("Array of definition parts to upload"),
       partsDirectoryPath: z.string().optional().describe("Path to a directory containing definition files"),
     },
+    WRITE,
     async ({ workspaceId, copyJobId, parts, partsDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -191,6 +202,7 @@ export function registerCopyJobTools(server: McpServer, fabricClient: FabricClie
       workspaceId: z.string().describe("The workspace ID"),
       copyJobId: z.string().describe("The copy job ID"),
     },
+    WRITE,
     async ({ workspaceId, copyJobId }) => {
       try {
         const job = await runOnDemandJob(fabricClient, workspaceId, copyJobId, "CopyJob");
@@ -209,6 +221,7 @@ export function registerCopyJobTools(server: McpServer, fabricClient: FabricClie
       copyJobId: z.string().describe("The copy job ID"),
       jobInstanceId: z.string().describe("The job instance ID from copy_job_run"),
     },
+    READ,
     async ({ workspaceId, copyJobId, jobInstanceId }) => {
       try {
         const job = await getJobInstance(fabricClient, workspaceId, copyJobId, jobInstanceId);
@@ -227,6 +240,7 @@ export function registerCopyJobTools(server: McpServer, fabricClient: FabricClie
       copyJobId: z.string().describe("The copy job ID"),
       jobInstanceId: z.string().describe("The job instance ID to cancel"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, copyJobId, jobInstanceId }) => {
       try {
         await cancelJobInstance(fabricClient, workspaceId, copyJobId, jobInstanceId);
@@ -244,6 +258,7 @@ export function registerCopyJobTools(server: McpServer, fabricClient: FabricClie
       workspaceId: z.string().describe("The workspace ID"),
       copyJobId: z.string().describe("The copy job ID"),
     },
+    READ,
     async ({ workspaceId, copyJobId }) => {
       try {
         const jobs = await listJobInstances(fabricClient, workspaceId, copyJobId);

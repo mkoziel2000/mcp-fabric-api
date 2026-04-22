@@ -14,11 +14,16 @@ interface DefinitionPart {
   payloadType: string;
 }
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerVariableLibraryTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "variable_library_list",
     "List all variable libraries in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const items = await paginateAll(fabricClient, `/workspaces/${workspaceId}/VariableLibraries`);
@@ -36,6 +41,7 @@ export function registerVariableLibraryTools(server: McpServer, fabricClient: Fa
       workspaceId: z.string().describe("The workspace ID"),
       variableLibraryId: z.string().describe("The variable library ID"),
     },
+    READ,
     async ({ workspaceId, variableLibraryId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/VariableLibraries/${variableLibraryId}`);
@@ -55,6 +61,7 @@ export function registerVariableLibraryTools(server: McpServer, fabricClient: Fa
       description: z.string().optional().describe("Description of the variable library (max 256 characters)"),
       definitionDirectoryPath: z.string().optional().describe("Path to a directory containing definition files (variables.json, settings.json, valueSets/*.json, .platform)"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -92,6 +99,7 @@ export function registerVariableLibraryTools(server: McpServer, fabricClient: Fa
       description: z.string().optional().describe("New description (max 256 characters)"),
       activeValueSetName: z.string().optional().describe("Name of the value set to make active"),
     },
+    WRITE,
     async ({ workspaceId, variableLibraryId, displayName, description, activeValueSetName }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -114,6 +122,7 @@ export function registerVariableLibraryTools(server: McpServer, fabricClient: Fa
       workspaceId: z.string().describe("The workspace ID"),
       variableLibraryId: z.string().describe("The variable library ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, variableLibraryId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -133,6 +142,7 @@ export function registerVariableLibraryTools(server: McpServer, fabricClient: Fa
       variableLibraryId: z.string().describe("The variable library ID"),
       outputDirectoryPath: z.string().describe("Directory path where definition files will be written"),
     },
+    READ,
     async ({ workspaceId, variableLibraryId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -172,6 +182,7 @@ export function registerVariableLibraryTools(server: McpServer, fabricClient: Fa
       variableLibraryId: z.string().describe("The variable library ID"),
       definitionDirectoryPath: z.string().describe("Path to a directory containing definition files (variables.json, settings.json, valueSets/*.json, .platform)"),
     },
+    WRITE,
     async ({ workspaceId, variableLibraryId, definitionDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);

@@ -9,11 +9,16 @@ import { WorkspaceGuard } from "../core/workspace-guard.js";
 import { resolveFilesOrDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
 import type { FileEntry } from "../utils/file-utils.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerWarehouseTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "warehouse_list",
     "List all warehouses in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const warehouses = await paginateAll(fabricClient, `/workspaces/${workspaceId}/warehouses`);
@@ -31,6 +36,7 @@ export function registerWarehouseTools(server: McpServer, fabricClient: FabricCl
       workspaceId: z.string().describe("The workspace ID"),
       warehouseId: z.string().describe("The warehouse ID"),
     },
+    READ,
     async ({ workspaceId, warehouseId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/warehouses/${warehouseId}`);
@@ -49,6 +55,7 @@ export function registerWarehouseTools(server: McpServer, fabricClient: FabricCl
       displayName: z.string().describe("Display name for the warehouse"),
       description: z.string().optional().describe("Description of the warehouse"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -76,6 +83,7 @@ export function registerWarehouseTools(server: McpServer, fabricClient: FabricCl
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, warehouseId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -97,6 +105,7 @@ export function registerWarehouseTools(server: McpServer, fabricClient: FabricCl
       workspaceId: z.string().describe("The workspace ID"),
       warehouseId: z.string().describe("The warehouse ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, warehouseId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -115,6 +124,7 @@ export function registerWarehouseTools(server: McpServer, fabricClient: FabricCl
       workspaceId: z.string().describe("The workspace ID"),
       warehouseId: z.string().describe("The warehouse ID"),
     },
+    READ,
     async ({ workspaceId, warehouseId }) => {
       try {
         const response = await fabricClient.get<Record<string, unknown>>(`/workspaces/${workspaceId}/warehouses/${warehouseId}`);
@@ -138,6 +148,7 @@ export function registerWarehouseTools(server: McpServer, fabricClient: FabricCl
       workspaceId: z.string().describe("The workspace ID"),
       warehouseId: z.string().describe("The warehouse ID"),
     },
+    READ,
     async ({ workspaceId, warehouseId }) => {
       try {
         const tables = await paginateAll(fabricClient, `/workspaces/${workspaceId}/warehouses/${warehouseId}/tables`, "data");
@@ -156,6 +167,7 @@ export function registerWarehouseTools(server: McpServer, fabricClient: FabricCl
       warehouseId: z.string().describe("The warehouse ID"),
       outputDirectoryPath: z.string().describe("Directory path where definition files will be written"),
     },
+    READ,
     async ({ workspaceId, warehouseId, outputDirectoryPath }) => {
       try {
         const response = await fabricClient.post<Record<string, unknown>>(
@@ -200,6 +212,7 @@ export function registerWarehouseTools(server: McpServer, fabricClient: FabricCl
       })).optional().describe("Array of definition parts to upload"),
       partsDirectoryPath: z.string().optional().describe("Path to a directory containing definition files"),
     },
+    WRITE,
     async ({ workspaceId, warehouseId, parts, partsDirectoryPath }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);

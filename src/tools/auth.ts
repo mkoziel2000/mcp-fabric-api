@@ -16,11 +16,16 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
   return JSON.parse(payload);
 }
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerAuthTools(server: McpServer, tokenManager: TokenManager) {
   server.tool(
     "auth_get_current_account",
     "Show the current Azure identity, tenant, and token expiry by decoding the Fabric JWT",
     {},
+    READ,
     async () => {
       try {
         const token = await tokenManager.getFabricToken();
@@ -52,6 +57,7 @@ export function registerAuthTools(server: McpServer, tokenManager: TokenManager)
     "auth_list_available_accounts",
     "List Azure subscriptions and tenants the local user has logged into via 'az login'. Reads local CLI state only — does not query Entra ID or list other users.",
     {},
+    READ,
     async () => {
       try {
         const { stdout } = await execFileAsync("az", ["account", "list", "--output", "json"], {
@@ -99,6 +105,7 @@ export function registerAuthTools(server: McpServer, tokenManager: TokenManager)
     {
       tenantId: z.string().describe("The Azure AD tenant ID (GUID) to switch to"),
     },
+    WRITE,
     async ({ tenantId }) => {
       const previousTenantId = tokenManager.getCurrentTenantId();
 
@@ -138,6 +145,7 @@ export function registerAuthTools(server: McpServer, tokenManager: TokenManager)
     "auth_clear_token_cache",
     "Clear cached authentication tokens to force re-acquisition on next API call",
     {},
+    DESTRUCTIVE,
     async () => {
       try {
         tokenManager.clearCache();

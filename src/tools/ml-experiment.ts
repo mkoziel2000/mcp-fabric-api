@@ -6,11 +6,16 @@ import { paginateAll } from "../core/pagination.js";
 import { pollOperation, getOperationResult } from "../core/lro.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
 
+const READ = { readOnlyHint: true, destructiveHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true } as const;
+
 export function registerMlExperimentTools(server: McpServer, fabricClient: FabricClient, workspaceGuard: WorkspaceGuard) {
   server.tool(
     "ml_experiment_list",
     "List all ML experiments in a workspace",
     { workspaceId: z.string().describe("The workspace ID") },
+    READ,
     async ({ workspaceId }) => {
       try {
         const experiments = await paginateAll(fabricClient, `/workspaces/${workspaceId}/mlExperiments`);
@@ -28,6 +33,7 @@ export function registerMlExperimentTools(server: McpServer, fabricClient: Fabri
       workspaceId: z.string().describe("The workspace ID"),
       mlExperimentId: z.string().describe("The ML experiment ID"),
     },
+    READ,
     async ({ workspaceId, mlExperimentId }) => {
       try {
         const response = await fabricClient.get(`/workspaces/${workspaceId}/mlExperiments/${mlExperimentId}`);
@@ -46,6 +52,7 @@ export function registerMlExperimentTools(server: McpServer, fabricClient: Fabri
       displayName: z.string().describe("Display name for the ML experiment"),
       description: z.string().optional().describe("Description of the ML experiment"),
     },
+    WRITE,
     async ({ workspaceId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -73,6 +80,7 @@ export function registerMlExperimentTools(server: McpServer, fabricClient: Fabri
       displayName: z.string().optional().describe("New display name"),
       description: z.string().optional().describe("New description"),
     },
+    WRITE,
     async ({ workspaceId, mlExperimentId, displayName, description }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
@@ -94,6 +102,7 @@ export function registerMlExperimentTools(server: McpServer, fabricClient: Fabri
       workspaceId: z.string().describe("The workspace ID"),
       mlExperimentId: z.string().describe("The ML experiment ID"),
     },
+    DESTRUCTIVE,
     async ({ workspaceId, mlExperimentId }) => {
       try {
         await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
