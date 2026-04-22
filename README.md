@@ -7,22 +7,28 @@ MCP (Model Context Protocol) server for the Microsoft Fabric REST APIs. Built fo
 ## Prerequisites
 
 - Node.js 18+
-- Azure CLI (`az login` for authentication)
 - Access to a Microsoft Fabric workspace
+- One of:
+  - Azure CLI (`az login`) — easiest on Windows
+  - Azure app registration with device code flow enabled — best for Mac / Claude Desktop
+  - Service principal credentials — best for headless / automated scenarios
 
 ## Quick Start
 
-Authenticate with Azure CLI:
+**Windows (Azure CLI):**
 
 ```bash
 az login
-```
-
-Run directly with npx (no install needed):
-
-```bash
 npx @einlogic/mcp-fabric-api
 ```
+
+**Mac / Claude Desktop (Device Code):**
+
+```bash
+AUTH_METHOD=device-code AZURE_CLIENT_ID=your-app-id AZURE_TENANT_ID=your-tenant-id npx @einlogic/mcp-fabric-api
+```
+
+On first API call, a sign-in URL and code will appear in the logs. Open the URL in your browser, enter the code, and authenticate.
 
 ## Setup
 
@@ -32,6 +38,8 @@ Add to your Claude Desktop config file:
 
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+**Windows (uses Azure CLI credentials):**
 
 ```json
 {
@@ -44,10 +52,40 @@ Add to your Claude Desktop config file:
 }
 ```
 
+**macOS (uses device code flow):**
+
+```json
+{
+  "mcpServers": {
+    "fabric": {
+      "command": "npx",
+      "args": ["-y", "@einlogic/mcp-fabric-api"],
+      "env": {
+        "AUTH_METHOD": "device-code",
+        "AZURE_CLIENT_ID": "your-app-client-id",
+        "AZURE_TENANT_ID": "your-tenant-id"
+      }
+    }
+  }
+}
+```
+
+When the server starts, check the Claude Desktop logs for a sign-in prompt:
+- **macOS:** `~/Library/Logs/Claude/mcp-server-fabric.log`
+- **Windows:** `%APPDATA%\Claude\logs\mcp-server-fabric.log`
+
+The prompt will say: *"To sign in, use a web browser to open https://microsoft.com/devicelogin and enter the code XXXXXXX"*. Complete the sign-in once and the token is cached for the session.
+
 ### Claude Code CLI
 
+**Windows:**
 ```bash
 claude mcp add fabric -- npx -y @einlogic/mcp-fabric-api
+```
+
+**macOS:**
+```bash
+claude mcp add fabric -e AUTH_METHOD=device-code -e AZURE_CLIENT_ID=your-app-id -e AZURE_TENANT_ID=your-tenant-id -- npx -y @einlogic/mcp-fabric-api
 ```
 
 To verify it was added:
@@ -74,6 +112,32 @@ The server exposes:
 - `GET /mcp` — SSE stream for server notifications
 - `DELETE /mcp` — Session cleanup
 - `GET /.well-known/oauth-protected-resource` — OAuth metadata
+
+### Authentication Methods
+
+The server supports multiple authentication methods via the `AUTH_METHOD` environment variable. Choose the method that fits your platform and scenario:
+
+| Method | `AUTH_METHOD` | Required env vars | Best for |
+|--------|--------------|-------------------|----------|
+| Azure CLI (default) | `default` | None | Windows with `az login` |
+| Device Code | `device-code` | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` | **Mac / Claude Desktop** |
+| Client Secret | `client-secret` | `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` | Headless / automated |
+| Interactive Browser | `interactive-browser` | None (optional: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) | Systems with browser access |
+
+**Default (Azure CLI):** Uses the `DefaultAzureCredential` chain from the Azure Identity SDK. On a developer machine this picks up credentials from `az login`. No extra configuration needed. This is the original behavior and works best on Windows where Claude Desktop can access the Azure CLI token cache.
+
+**Device Code:** On first API call, prints a URL and one-time code to stderr. You open the URL in any browser, enter the code, and sign in with your Azure account. The token is cached in memory for the session. This is the recommended method for **Mac users with Claude Desktop**, because the Claude Desktop process on macOS cannot access the Azure CLI token cache.
+
+To use device code flow, you need an Azure app registration with **"Allow public client flows"** enabled:
+1. Go to [Azure Portal](https://portal.azure.com) > App registrations > New registration
+2. Name it (e.g., "Fabric MCP") and register
+3. Under **Authentication** > **Advanced settings**, set **"Allow public client flows"** to **Yes**
+4. Under **API permissions**, add `https://api.fabric.microsoft.com/Workspace.ReadWrite.All` (or the scopes your tools need)
+5. Copy the **Application (client) ID** and your **Directory (tenant) ID**
+
+**Client Secret:** Uses a service principal with client credentials. Requires an Azure app registration with a client secret. Suitable for CI/CD pipelines, automated scripts, or any headless environment where interactive sign-in is not possible.
+
+**Interactive Browser:** Opens a browser window for OAuth sign-in. Works on systems where the server process can launch a browser. Optional `AZURE_CLIENT_ID` and `AZURE_TENANT_ID` can be provided to target a specific app and tenant.
 
 ### Workspace Safety Guard
 
@@ -128,7 +192,7 @@ WRITABLE_WORKSPACES=*-Dev,*-Test,Sandbox*
 
 **Not guarded:** Read operations (list, get, get_definition, get_bim, get_tmdl), query execution (DAX, KQL, SQL, GraphQL), run/refresh/cancel operations, export operations, and deployment pipeline CRUD (tenant-level, not workspace-scoped).
 
-**Claude Desktop config with guard:**
+**Claude Desktop config with guard (Windows):**
 ```json
 {
   "mcpServers": {
@@ -136,6 +200,24 @@ WRITABLE_WORKSPACES=*-Dev,*-Test,Sandbox*
       "command": "npx",
       "args": ["-y", "@einlogic/mcp-fabric-api"],
       "env": {
+        "WRITABLE_WORKSPACES": "*-Dev,*-Test,Sandbox*"
+      }
+    }
+  }
+}
+```
+
+**Claude Desktop config with guard (macOS):**
+```json
+{
+  "mcpServers": {
+    "fabric": {
+      "command": "npx",
+      "args": ["-y", "@einlogic/mcp-fabric-api"],
+      "env": {
+        "AUTH_METHOD": "device-code",
+        "AZURE_CLIENT_ID": "your-app-client-id",
+        "AZURE_TENANT_ID": "your-tenant-id",
         "WRITABLE_WORKSPACES": "*-Dev,*-Test,Sandbox*"
       }
     }

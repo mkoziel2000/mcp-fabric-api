@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { TokenManager } from "./auth/token-manager.js";
+import { TokenManager, type AuthConfig } from "./auth/token-manager.js";
 import { FabricClient } from "./client/fabric-client.js";
 import { PowerBIClient } from "./client/powerbi-client.js";
 import { registerWorkspaceTools } from "./tools/workspace.js";
@@ -32,6 +32,7 @@ import { WorkspaceGuard } from "./core/workspace-guard.js";
 
 export interface CreateServerOptions {
   tokenManager?: TokenManager;
+  authConfig?: AuthConfig;
 }
 
 export function createServer(options?: CreateServerOptions): McpServer {
@@ -40,7 +41,15 @@ export function createServer(options?: CreateServerOptions): McpServer {
     version: "2.7.0",
   });
 
-  const tokenManager = options?.tokenManager ?? new TokenManager();
+  // Wire device code prompts to MCP logging so clients (e.g., Claude Desktop) can surface them
+  const authConfig = options?.authConfig;
+  if (authConfig?.method === "device-code" && !authConfig.onDeviceCodePrompt) {
+    authConfig.onDeviceCodePrompt = (message: string) => {
+      server.sendLoggingMessage({ level: "warning", logger: "auth", data: message });
+    };
+  }
+
+  const tokenManager = options?.tokenManager ?? new TokenManager(authConfig);
   const fabricClient = new FabricClient(tokenManager);
   const powerBIClient = new PowerBIClient(tokenManager);
   const sqlClient = new SqlClient(tokenManager);

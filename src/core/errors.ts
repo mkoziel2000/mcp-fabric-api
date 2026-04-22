@@ -1,3 +1,15 @@
+/**
+ * Thrown when device-code authentication is required.
+ * The message contains the URL and code the user must use to authenticate.
+ * This is NOT an error — it signals the user needs to act before retrying.
+ */
+export class DeviceCodeAuthRequired extends Error {
+  constructor(public deviceCodeMessage: string) {
+    super(deviceCodeMessage);
+    this.name = "DeviceCodeAuthRequired";
+  }
+}
+
 export class FabricApiError extends Error {
   constructor(
     message: string,
@@ -12,7 +24,14 @@ export class FabricApiError extends Error {
   }
 }
 
-export function formatToolError(error: unknown): { content: Array<{ type: "text"; text: string }>; isError: true } {
+export function formatToolError(error: unknown): { content: Array<{ type: "text"; text: string }>; isError: boolean } {
+  if (error instanceof DeviceCodeAuthRequired) {
+    return {
+      content: [{ type: "text", text: `🔐 Authentication required.\n\n${error.deviceCodeMessage}\n\nOnce you have completed the sign-in, retry the tool call.` }],
+      isError: false,
+    };
+  }
+
   let message: string;
   if (error instanceof FabricApiError) {
     message = `Fabric API Error (${error.statusCode}): ${error.message}`;
