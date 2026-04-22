@@ -38,7 +38,7 @@ export interface CreateServerOptions {
 export function createServer(options?: CreateServerOptions): McpServer {
   const server = new McpServer({
     name: "mcp-fabric-api",
-    version: "2.7.0",
+    version: "2.8.0",
   });
 
   // Wire device code prompts to MCP logging so clients (e.g., Claude Desktop) can surface them
