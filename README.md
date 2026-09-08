@@ -163,12 +163,18 @@ WRITABLE_WORKSPACES=*-Dev,*-Test,Sandbox*
 - `Sandbox*` matches "Sandbox-123", "Sandbox-Mike"
 - `Exact-Name` matches only "Exact-Name" (case-insensitive)
 
-**Guarded tools (102 total)** — every tool that creates, updates, or deletes workspace items:
+**Guarded tools (131 total)** — every tool that creates, updates, or deletes workspace items:
 
 | Domain | Guarded tools |
 |--------|--------------|
-| Workspace | `workspace_update`, `workspace_delete` |
-| Lakehouse | `lakehouse_create`, `lakehouse_update`, `lakehouse_delete`, `lakehouse_load_table`, `lakehouse_create_shortcut`, `lakehouse_update_definition`, `lakehouse_delete_shortcut` |
+| Workspace | `workspace_update`, `workspace_delete`, `workspace_add_role_assignment`, `workspace_update_role_assignment`, `workspace_delete_role_assignment` |
+| Folder | `folder_create`, `folder_update`, `folder_move`, `folder_delete` |
+| Tags | `item_apply_tags`, `item_unapply_tags` |
+| OneLake Data Access Security | `onelake_set_data_access_role`, `onelake_delete_data_access_role` |
+| SQL Database | `sql_database_create`, `sql_database_update`, `sql_database_delete`, `sql_database_update_definition`, `sql_database_start_mirroring`, `sql_database_stop_mirroring` |
+| KQL Queryset | `kql_queryset_create`, `kql_queryset_update`, `kql_queryset_delete`, `kql_queryset_update_definition` |
+| KQL Dashboard | `kql_dashboard_create`, `kql_dashboard_update`, `kql_dashboard_delete`, `kql_dashboard_update_definition` |
+| Lakehouse | `lakehouse_create`, `lakehouse_update`, `lakehouse_delete`, `lakehouse_load_table`, `lakehouse_create_shortcut`, `lakehouse_update_definition`, `lakehouse_delete_shortcut`, `lakehouse_create_folder`, `lakehouse_upload_file`, `lakehouse_move_file`, `lakehouse_delete_file` |
 | Warehouse | `warehouse_create`, `warehouse_update`, `warehouse_delete`, `warehouse_update_definition` |
 | Notebook | `notebook_create`, `notebook_update`, `notebook_delete`, `notebook_update_definition`, `notebook_attach_environment`, `notebook_detach_environment` |
 | Pipeline | `pipeline_create`, `pipeline_update`, `pipeline_delete`, `pipeline_create_schedule`, `pipeline_update_schedule`, `pipeline_delete_schedule`, `pipeline_update_definition` |
@@ -307,7 +313,7 @@ Every tool declares MCP [`ToolAnnotations`](https://modelcontextprotocol.io/spec
 | `readOnlyHint: false, destructiveHint: false` | Creates or updates state | `*_create`, `*_update`, `*_run`, `*_refresh`, `*_publish`, `*_import`, `*_upload` |
 | `readOnlyHint: false, destructiveHint: true` | Deletes, cancels, or removes | `*_delete`, `*_cancel_run`, `*_remove_*`, `*_revoke`, `*_disconnect`, `*_detach_*` |
 
-All 219 tools carry these hints. The workspace safety guard (`WRITABLE_WORKSPACES`) still applies independently on top of whatever the client permits.
+All 273 tools carry these hints. The workspace safety guard (`WRITABLE_WORKSPACES`) still applies independently on top of whatever the client permits.
 
 ### File-Based I/O
 
@@ -334,10 +340,14 @@ To avoid large payloads overwhelming MCP clients, definition tools use file path
 | `mirrored_database_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
 | `kql_database_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
 | `copy_job_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
+| `sql_database_update_definition` | `partsDirectoryPath` | Directory of `.dacpac` or `.sqlproj`/`.sql` files (or inline `parts`) |
+| `kql_queryset_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
+| `kql_dashboard_update_definition` | `partsDirectoryPath` | Directory of definition files (or inline `parts`) |
 | `environment_create` | `definitionDirectoryPath` (optional) | Directory of environment definition files to seed on create |
 | `environment_update_definition` | `definitionDirectoryPath` | Directory of environment definition files |
 | `environment_import_staging_external_libraries` | `yamlFilePath` | Path to an `environment.yml` file (replaces external library list) |
 | `environment_upload_staging_custom_library` | `libraryFilePath` | Path to `.jar` / `.py` / `.whl` / `.tar.gz` (max 100 MB) |
+| `lakehouse_upload_file` | `localFilePath` | Any local file (binary-safe), uploaded to the lakehouse's Files section via the OneLake Data Access API |
 
 **Output tools** — the server retrieves definitions from Fabric and writes them to disk:
 
@@ -357,8 +367,13 @@ To avoid large payloads overwhelming MCP clients, definition tools use file path
 | `variable_library_get_definition` | `outputDirectoryPath` | Variable library files (variables.json, valueSets/) |
 | `mirrored_database_get_definition` | `outputDirectoryPath` | Mirrored database definition files |
 | `kql_database_get_definition` | `outputDirectoryPath` | KQL database definition files |
+| `lakehouse_download_file` | `localFilePath` | Any file (binary-safe) from the lakehouse's Files section, via the OneLake Data Access API |
+| `notebook_get_livy_log` | `outputFilePath` | Raw Livy/driver/executor log text for a notebook's Spark session |
 | `copy_job_get_definition` | `outputDirectoryPath` | Copy job definition files |
 | `environment_get_definition` | `outputDirectoryPath` | Environment definition files |
+| `sql_database_get_definition` | `outputDirectoryPath` | SQL database definition files (`.dacpac` or `.sqlproj`/`.sql`) |
+| `kql_queryset_get_definition` | `outputDirectoryPath` | KQL queryset definition files |
+| `kql_dashboard_get_definition` | `outputDirectoryPath` | KQL dashboard definition files |
 | `environment_export_staging_external_libraries` | `outputFilePath` | Staging `environment.yml` |
 | `environment_export_published_external_libraries` | `outputFilePath` | Published `environment.yml` |
 
@@ -386,7 +401,7 @@ npm run dev          # Watch mode
 npm run inspect      # Launch MCP Inspector
 ```
 
-## Tools (219 total)
+## Tools (273 total)
 
 ### Auth (4 tools)
 | Tool | Description |
@@ -396,7 +411,7 @@ npm run inspect      # Launch MCP Inspector
 | `auth_switch_tenant` | Switch to a different Azure tenant (with rollback on failure) |
 | `auth_clear_token_cache` | Clear cached tokens to force re-acquisition |
 
-### Workspace (6 tools)
+### Workspace (11 tools)
 | Tool | Description |
 |------|-------------|
 | `workspace_list` | List all accessible Fabric workspaces |
@@ -405,8 +420,13 @@ npm run inspect      # Launch MCP Inspector
 | `workspace_update` | Update a workspace's name or description |
 | `workspace_delete` | Delete a workspace |
 | `workspace_list_items` | List all items in a workspace (with optional type filter) |
+| `workspace_list_role_assignments` | List who has Admin/Member/Contributor/Viewer access to a workspace |
+| `workspace_get_role_assignment` | Get a specific role assignment by ID |
+| `workspace_add_role_assignment` | Grant a user, group, service principal, or the entire tenant a workspace role |
+| `workspace_update_role_assignment` | Change a principal's workspace role |
+| `workspace_delete_role_assignment` | Remove a principal's workspace role assignment |
 
-### Lakehouse (14 tools)
+### Lakehouse (21 tools)
 | Tool | Description |
 |------|-------------|
 | `lakehouse_list` | List all lakehouses in a workspace |
@@ -423,6 +443,13 @@ npm run inspect      # Launch MCP Inspector
 | `lakehouse_list_shortcuts` | List all OneLake shortcuts in a lakehouse |
 | `lakehouse_get_shortcut` | Get details of a specific OneLake shortcut |
 | `lakehouse_delete_shortcut` | Delete a OneLake shortcut |
+| `lakehouse_list_files` | List files/folders under a path in the Files section (OneLake Data Access API) |
+| `lakehouse_get_file_properties` | Get metadata (size, last modified, etag) for a file or folder in Files |
+| `lakehouse_create_folder` | Create a folder in the Files section |
+| `lakehouse_upload_file` | Upload a local file into the Files section |
+| `lakehouse_download_file` | Download a file from the Files section to local disk |
+| `lakehouse_move_file` | Move or rename a file or folder within the Files section |
+| `lakehouse_delete_file` | Delete a file or folder from the Files section |
 
 ### Warehouse (9 tools)
 | Tool | Description |
@@ -437,7 +464,7 @@ npm run inspect      # Launch MCP Inspector
 | `warehouse_get_definition` | Get warehouse definition (LRO). Writes files to `outputDirectoryPath` |
 | `warehouse_update_definition` | Update warehouse definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
 
-### Notebook (12 tools)
+### Notebook (15 tools)
 | Tool | Description |
 |------|-------------|
 | `notebook_list` | List all notebooks in a workspace |
@@ -450,10 +477,13 @@ npm run inspect      # Launch MCP Inspector
 | `notebook_run` | Run a notebook on demand |
 | `notebook_get_run_status` | Get notebook run status |
 | `notebook_cancel_run` | Cancel a running notebook |
+| `notebook_list_livy_sessions` | List Spark Livy sessions for a notebook (state, compute sizing, durations) |
+| `notebook_get_livy_session` | Get details of a specific Livy session |
+| `notebook_get_livy_log` | Download the Livy/driver/executor log for a Livy session to local disk — the driver log is the closest thing to notebook "results" available via API (unstructured print/display output, stack traces) |
 | `notebook_attach_environment` | Attach a Fabric Environment to a notebook by mutating its definition metadata (handles both `.py` and `.ipynb` notebooks) |
 | `notebook_detach_environment` | Remove the attached environment from a notebook |
 
-### Pipeline (15 tools)
+### Pipeline (16 tools)
 | Tool | Description |
 |------|-------------|
 | `pipeline_list` | List all data pipelines |
@@ -465,6 +495,7 @@ npm run inspect      # Launch MCP Inspector
 | `pipeline_get_run_status` | Get pipeline run status |
 | `pipeline_cancel_run` | Cancel a running pipeline |
 | `pipeline_list_runs` | List all run instances |
+| `pipeline_query_activity_runs` | Get per-activity run details for a pipeline run (status, input, output, error per activity) |
 | `pipeline_list_schedules` | List pipeline schedules |
 | `pipeline_create_schedule` | Create a pipeline schedule |
 | `pipeline_update_schedule` | Update a pipeline schedule |
@@ -705,6 +736,91 @@ Fabric Environments are the attachable runtime unit for notebooks and Spark job 
 | `environment_list_published_libraries` | List published (currently effective) libraries |
 | `environment_get_published_spark_compute` | Get published Spark compute configuration |
 | `environment_export_published_external_libraries` | Export published external libraries as `environment.yml` to `outputFilePath` |
+
+### Folder (6 tools, preview API)
+
+In-workspace folder hierarchy for organizing items.
+
+| Tool | Description |
+|------|-------------|
+| `folder_list` | List folders in a workspace, optionally scoped to a subtree |
+| `folder_get` | Get details of a specific folder |
+| `folder_create` | Create a folder (optionally nested under a parent folder) |
+| `folder_update` | Rename a folder |
+| `folder_move` | Move a folder to a different parent (or to the workspace root) |
+| `folder_delete` | Delete a folder |
+
+### Tags (3 tools)
+
+Tenant-wide tags applied to items for categorization and discovery.
+
+| Tool | Description |
+|------|-------------|
+| `tag_list` | List all tags defined in the tenant |
+| `item_apply_tags` | Apply one or more existing tags to a workspace item |
+| `item_unapply_tags` | Remove one or more tags from a workspace item |
+
+### Catalog (1 tool, preview API)
+
+| Tool | Description |
+|------|-------------|
+| `catalog_search` | Search for Fabric items across every workspace the caller can access, without needing to know which workspace they're in |
+
+### OneLake Data Access Security (4 tools, preview API)
+
+Fine-grained, table/folder-level read access roles inside a Lakehouse (or other OneLake-backed item) — finer-grained than workspace roles.
+
+| Tool | Description |
+|------|-------------|
+| `onelake_list_data_access_roles` | List data access roles defined on an item |
+| `onelake_get_data_access_role` | Get details of a specific role |
+| `onelake_set_data_access_role` | Create or update (upsert) a single role without touching other roles on the item |
+| `onelake_delete_data_access_role` | Delete a role by name |
+
+### SQL Database (10 tools)
+
+Fabric's native transactional SQL database item (OLTP), distinct from Warehouse (OLAP).
+
+| Tool | Description |
+|------|-------------|
+| `sql_database_list` | List all SQL databases in a workspace |
+| `sql_database_get` | Get database details including connection string |
+| `sql_database_create` | Create a new database (fresh, or restored from a source/deleted database via `creationPayload`) |
+| `sql_database_update` | Update database name or description |
+| `sql_database_delete` | Delete a database |
+| `sql_database_get_definition` | Get the public definition (dacpac/sqlproj, LRO). Writes files to `outputDirectoryPath` |
+| `sql_database_update_definition` | Update the public definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
+| `sql_database_list_restorable_deleted_databases` | List deleted databases still eligible for point-in-time restore |
+| `sql_database_start_mirroring` | Start streaming database changes into OneLake as Delta tables |
+| `sql_database_stop_mirroring` | Stop mirroring |
+
+### KQL Queryset (7 tools)
+
+Saved KQL query tabs associated with a KQL/Eventhouse database.
+
+| Tool | Description |
+|------|-------------|
+| `kql_queryset_list` | List all KQL querysets in a workspace |
+| `kql_queryset_get` | Get queryset details |
+| `kql_queryset_create` | Create a new queryset (optionally seeded from `definitionDirectoryPath`) |
+| `kql_queryset_update` | Update name or description |
+| `kql_queryset_delete` | Delete a queryset |
+| `kql_queryset_get_definition` | Get the definition (LRO). Writes files to `outputDirectoryPath` |
+| `kql_queryset_update_definition` | Update the definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
+
+### KQL Dashboard (7 tools)
+
+Real-time visualization dashboards built on KQL/Eventhouse data — the Real-Time Intelligence equivalent of a Power BI Report.
+
+| Tool | Description |
+|------|-------------|
+| `kql_dashboard_list` | List all KQL dashboards in a workspace |
+| `kql_dashboard_get` | Get dashboard details |
+| `kql_dashboard_create` | Create a new dashboard (optionally seeded from `definitionDirectoryPath`) |
+| `kql_dashboard_update` | Update name or description |
+| `kql_dashboard_delete` | Delete a dashboard |
+| `kql_dashboard_get_definition` | Get the definition (LRO). Writes files to `outputDirectoryPath` |
+| `kql_dashboard_update_definition` | Update the definition (LRO). Reads from `partsDirectoryPath` or inline `parts` |
 
 ## License
 

@@ -62,6 +62,22 @@ export async function writeContentToFile(filePath: string, content: string): Pro
   return absolutePath;
 }
 
+export async function readBinaryFile(filePath: string): Promise<Buffer> {
+  const absolutePath = resolve(filePath);
+  const fileStat = await stat(absolutePath);
+  if (!fileStat.isFile()) {
+    throw new Error(`Path is not a file: ${absolutePath}`);
+  }
+  return readFile(absolutePath);
+}
+
+export async function writeBinaryFile(filePath: string, content: Buffer): Promise<string> {
+  const absolutePath = resolve(filePath);
+  await mkdir(dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, content);
+  return absolutePath;
+}
+
 export async function writeFilesToDirectory(
   dirPath: string,
   files: FileEntry[]

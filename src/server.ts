@@ -4,6 +4,7 @@ import { FabricClient } from "./client/fabric-client.js";
 import { PowerBIClient } from "./client/powerbi-client.js";
 import { registerWorkspaceTools } from "./tools/workspace.js";
 import { registerLakehouseTools } from "./tools/lakehouse.js";
+import { registerLakehouseFileTools } from "./tools/lakehouse-files.js";
 import { registerNotebookTools } from "./tools/notebook.js";
 import { registerPipelineTools } from "./tools/pipeline.js";
 import { registerSemanticModelTools } from "./tools/semantic-model.js";
@@ -26,8 +27,16 @@ import { registerMlExperimentTools } from "./tools/ml-experiment.js";
 import { registerCopyJobTools } from "./tools/copy-job.js";
 import { registerExternalDataShareTools } from "./tools/external-data-share.js";
 import { registerEnvironmentTools } from "./tools/environment.js";
+import { registerFolderTools } from "./tools/folder.js";
+import { registerTagTools } from "./tools/tag.js";
+import { registerCatalogTools } from "./tools/catalog.js";
+import { registerOneLakeDataAccessTools } from "./tools/onelake-data-access.js";
+import { registerSqlDatabaseTools } from "./tools/sql-database.js";
+import { registerKqlQuerysetTools } from "./tools/kql-queryset.js";
+import { registerKqlDashboardTools } from "./tools/kql-dashboard.js";
 import { SqlClient } from "./client/sql-client.js";
 import { KustoClient } from "./client/kusto-client.js";
+import { OneLakeClient } from "./client/onelake-client.js";
 import { WorkspaceGuard } from "./core/workspace-guard.js";
 
 export interface CreateServerOptions {
@@ -54,11 +63,13 @@ export function createServer(options?: CreateServerOptions): McpServer {
   const powerBIClient = new PowerBIClient(tokenManager);
   const sqlClient = new SqlClient(tokenManager);
   const kustoClient = new KustoClient(tokenManager);
+  const oneLakeClient = new OneLakeClient(tokenManager);
   const workspaceGuard = new WorkspaceGuard();
 
   // Register all domain tools
   registerWorkspaceTools(server, fabricClient, workspaceGuard);
   registerLakehouseTools(server, fabricClient, sqlClient, workspaceGuard);
+  registerLakehouseFileTools(server, fabricClient, oneLakeClient, workspaceGuard);
   registerWarehouseTools(server, fabricClient, workspaceGuard);
   registerNotebookTools(server, fabricClient, workspaceGuard);
   registerPipelineTools(server, fabricClient, workspaceGuard);
@@ -80,6 +91,13 @@ export function createServer(options?: CreateServerOptions): McpServer {
   registerCopyJobTools(server, fabricClient, workspaceGuard);
   registerExternalDataShareTools(server, fabricClient, workspaceGuard);
   registerEnvironmentTools(server, fabricClient, workspaceGuard);
+  registerFolderTools(server, fabricClient, workspaceGuard);
+  registerTagTools(server, fabricClient, workspaceGuard);
+  registerCatalogTools(server, fabricClient);
+  registerOneLakeDataAccessTools(server, fabricClient, workspaceGuard);
+  registerSqlDatabaseTools(server, fabricClient, workspaceGuard);
+  registerKqlQuerysetTools(server, fabricClient, workspaceGuard);
+  registerKqlDashboardTools(server, fabricClient, workspaceGuard);
   registerAuthTools(server, tokenManager);
 
   return server;

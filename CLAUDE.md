@@ -18,6 +18,7 @@ src/
   client/
     fabric-client.ts          # HTTP client for https://api.fabric.microsoft.com/v1/
     powerbi-client.ts         # HTTP client for https://api.powerbi.com/v1.0/myorg/
+    onelake-client.ts         # ADLS Gen2-compatible client for https://onelake.dfs.fabric.microsoft.com/ (lakehouse Files CRUD)
   core/
     errors.ts                 # FabricApiError + formatToolError helper
     types.ts                  # Shared TypeScript interfaces
@@ -26,11 +27,12 @@ src/
     job-scheduler.ts          # On-demand job run/cancel/status/list
   tools/
     auth.ts                   # 4 tools
-    workspace.ts              # 6 tools
-    lakehouse.ts              # 9 tools
+    workspace.ts              # 11 tools (incl. role assignments)
+    lakehouse.ts              # 14 tools
+    lakehouse-files.ts        # 7 tools (Files section CRUD via OneLake Data Access API)
     warehouse.ts              # 7 tools
-    notebook.ts               # 10 tools
-    pipeline.ts               # 13 tools
+    notebook.ts               # 15 tools (incl. Livy session/log diagnostics)
+    pipeline.ts               # 16 tools (incl. per-activity run query)
     semantic-model.ts         # 12 tools
     report.ts                 # 10 tools
     dataflow.ts               # 7 tools
@@ -39,7 +41,14 @@ src/
     reflex.ts                 # 6 tools
     graphql-api.ts            # 7 tools
     sql-endpoint.ts           # 4 tools
+    sql-database.ts           # 10 tools (SQL Database item — Fabric's native OLTP database, distinct from Warehouse)
     variable-library.ts       # 7 tools
+    folder.ts                 # 6 tools (in-workspace folder hierarchy, preview API)
+    tag.ts                    # 3 tools (tenant tags + apply/unapply on items)
+    catalog.ts                # 1 tool (cross-workspace item search, preview API)
+    onelake-data-access.ts    # 4 tools (OneLake data access roles — table/folder-level read security, preview API)
+    kql-queryset.ts           # 7 tools
+    kql-dashboard.ts          # 7 tools
   utils/
     base64.ts                 # Base64 encode/decode for item definitions
     tmdl.ts                   # TMDL encode/decode/format helpers for semantic models
@@ -63,7 +72,10 @@ npm run inspect      # Launch MCP Inspector
 - **Error handling:** Tools catch errors and return `{ content, isError: true }` via `formatToolError()`, never throw `McpError`
 - **LRO:** Detect 202 responses → poll `/v1/operations/{operationId}` until terminal state
 - **Pagination:** Follow `continuationUri` or `continuationToken` in response body
-- **Dual tokens:** Fabric scope (`https://api.fabric.microsoft.com/.default`) and Power BI scope (`https://analysis.windows.net/powerbi/api/.default`)
+- **Multi-scope tokens:** Fabric (`https://api.fabric.microsoft.com/.default`), Power BI (`https://analysis.windows.net/powerbi/api/.default`), SQL (`https://database.windows.net/.default`), Kusto (`https://api.kusto.windows.net/.default`), and OneLake/ADLS (`https://storage.azure.com/.default`) — see `TokenManager`
+- **OneLake Files access:** Lakehouse Files-section CRUD (`lakehouse_list_files`, `lakehouse_upload_file`, etc.) does not go through the Fabric REST API — it uses the OneLake Data Access API (`OneLakeClient`), an ADLS Gen2-compatible surface addressed as `/{workspaceId}/{itemId}/{path}` at `https://onelake.dfs.fabric.microsoft.com`. Uploads/downloads use binary-safe file I/O (`readBinaryFile`/`writeBinaryFile`), not the UTF-8 helpers used for definition JSON/TMDL.
+- **Run diagnostics:** There is no API for structured notebook cell output or a "run snapshot" — `notebook_get_livy_log` (`type=driver`) is the closest thing, returning raw Spark driver stdout/stderr as text. Pipeline per-activity detail (status/input/output/error per activity, not just overall run status) comes from `pipeline_query_activity_runs`, which POSTs to `/workspaces/{workspaceId}/datapipelines/pipelineruns/{jobId}/queryactivityruns` — a real but lightly-documented endpoint (not in the formal `/rest/api/fabric/` reference catalog, only in the conceptual Data Factory REST API docs).
+- **Preview APIs:** Folders, Catalog Search, and OneLake Data Access Security are Microsoft-labeled preview surfaces — paths/params may change upstream. The single-role OneLake Data Access Security operations (`onelake_get_data_access_role`, `onelake_set_data_access_role`, `onelake_list_data_access_roles`, `onelake_delete_data_access_role`) require `?preview=true` on the query string; the bulk "replace all roles" variant does not (and is intentionally not exposed as a tool — it wipes roles not present in the payload, so `onelake_set_data_access_role` upserts one role at a time instead).
 - **Transport:** `TRANSPORT=stdio` (default) or `TRANSPORT=http` (Express + StreamableHTTP)
 - **Logging:** `console.error()` only — stdout is reserved for JSON-RPC in stdio mode
 - **ESM:** Project uses `"type": "module"`, all imports use `.js` extensions
@@ -87,3 +99,4 @@ When adding new tools against Fabric APIs that deal with item definitions or oth
 
 - Fabric: `https://api.fabric.microsoft.com/v1/`
 - Power BI: `https://api.powerbi.com/v1.0/myorg/`
+- OneLake Data Access (ADLS Gen2-compatible): `https://onelake.dfs.fabric.microsoft.com/`

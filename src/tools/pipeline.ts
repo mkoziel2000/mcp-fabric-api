@@ -193,6 +193,40 @@ export function registerPipelineTools(server: McpServer, fabricClient: FabricCli
     }
   );
 
+  server.tool(
+    "pipeline_query_activity_runs",
+    "Get per-activity run details for a pipeline run — status, resolved input, output (e.g. rows read/written for a Copy activity), and error per activity. This is the level of detail behind the pipeline's overall status; use it to see which activity failed and why, or what an activity actually did.",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      jobId: z.string().describe("The pipeline run's job instance ID (from pipeline_run, pipeline_get_run_status, or pipeline_list_runs)"),
+      lastUpdatedAfter: z.string().optional().describe("ISO 8601 timestamp; only activity runs updated after this time (default: 30 days before now)"),
+      lastUpdatedBefore: z.string().optional().describe("ISO 8601 timestamp; only activity runs updated before this time (default: now)"),
+      orderByField: z.string().default("ActivityRunStart").describe("Field to sort by (default: ActivityRunStart)"),
+      orderByDirection: z.enum(["ASC", "DESC"]).default("DESC").describe("Sort direction (default: DESC)"),
+      filters: z.array(z.record(z.unknown())).optional().describe("Optional raw filter objects (e.g. { operand: 'ActivityName', operator: 'Equals', values: ['MyActivity'] })"),
+    },
+    READ,
+    async ({ workspaceId, jobId, lastUpdatedAfter, lastUpdatedBefore, orderByField, orderByDirection, filters }) => {
+      try {
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const body = {
+          filters: filters ?? [],
+          orderBy: [{ orderBy: orderByField, order: orderByDirection }],
+          lastUpdatedAfter: lastUpdatedAfter ?? thirtyDaysAgo.toISOString(),
+          lastUpdatedBefore: lastUpdatedBefore ?? now.toISOString(),
+        };
+        const response = await fabricClient.post(
+          `/workspaces/${workspaceId}/datapipelines/pipelineruns/${jobId}/queryactivityruns`,
+          body
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
   // Schedule tools
   server.tool(
     "pipeline_list_schedules",

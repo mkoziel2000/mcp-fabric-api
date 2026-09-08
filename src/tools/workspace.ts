@@ -120,4 +120,101 @@ export function registerWorkspaceTools(server: McpServer, fabricClient: FabricCl
       }
     }
   );
+
+  const PRINCIPAL_TYPE = z.enum(["User", "Group", "ServicePrincipal", "ServicePrincipalProfile", "EntireTenant"]);
+  const WORKSPACE_ROLE = z.enum(["Admin", "Member", "Contributor", "Viewer"]);
+
+  server.tool(
+    "workspace_list_role_assignments",
+    "List all role assignments (who has Admin/Member/Contributor/Viewer access) for a workspace",
+    { workspaceId: z.string().describe("The workspace ID") },
+    READ,
+    async ({ workspaceId }) => {
+      try {
+        const assignments = await paginateAll(fabricClient, `/workspaces/${workspaceId}/roleAssignments`);
+        return { content: [{ type: "text", text: JSON.stringify(assignments, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "workspace_get_role_assignment",
+    "Get a specific workspace role assignment by its ID",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      workspaceRoleAssignmentId: z.string().describe("The role assignment ID"),
+    },
+    READ,
+    async ({ workspaceId, workspaceRoleAssignmentId }) => {
+      try {
+        const response = await fabricClient.get(`/workspaces/${workspaceId}/roleAssignments/${workspaceRoleAssignmentId}`);
+        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "workspace_add_role_assignment",
+    "Grant a principal (user, group, service principal, or the entire tenant) a role on a workspace",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      principalId: z.string().describe("The principal's Microsoft Entra object ID (or tenant ID for an EntireTenant principal)"),
+      principalType: PRINCIPAL_TYPE.describe("The type of principal"),
+      role: WORKSPACE_ROLE.describe("The workspace role to grant"),
+    },
+    WRITE,
+    async ({ workspaceId, principalId, principalType, role }) => {
+      try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        const body = { principal: { id: principalId, type: principalType }, role };
+        const response = await fabricClient.post(`/workspaces/${workspaceId}/roleAssignments`, body);
+        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "workspace_update_role_assignment",
+    "Change the role of an existing workspace role assignment",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      workspaceRoleAssignmentId: z.string().describe("The role assignment ID"),
+      role: WORKSPACE_ROLE.describe("The new workspace role"),
+    },
+    WRITE,
+    async ({ workspaceId, workspaceRoleAssignmentId, role }) => {
+      try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        const response = await fabricClient.patch(`/workspaces/${workspaceId}/roleAssignments/${workspaceRoleAssignmentId}`, { role });
+        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "workspace_delete_role_assignment",
+    "Remove a principal's role assignment from a workspace",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      workspaceRoleAssignmentId: z.string().describe("The role assignment ID"),
+    },
+    DESTRUCTIVE,
+    async ({ workspaceId, workspaceRoleAssignmentId }) => {
+      try {
+        await workspaceGuard.assertWorkspaceAllowed(fabricClient, workspaceId);
+        await fabricClient.delete(`/workspaces/${workspaceId}/roleAssignments/${workspaceRoleAssignmentId}`);
+        return { content: [{ type: "text", text: `Role assignment ${workspaceRoleAssignmentId} deleted successfully` }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
 }

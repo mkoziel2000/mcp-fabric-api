@@ -7,7 +7,7 @@ import { pollOperation, getOperationResult } from "../core/lro.js";
 import { runOnDemandJob, getJobInstance, cancelJobInstance } from "../core/job-scheduler.js";
 import { decodeBase64, encodeBase64 } from "../utils/base64.js";
 import { WorkspaceGuard } from "../core/workspace-guard.js";
-import { readFilesFromDirectory, writeFilesToDirectory } from "../utils/file-utils.js";
+import { readFilesFromDirectory, writeFilesToDirectory, writeContentToFile } from "../utils/file-utils.js";
 
 const READ = { readOnlyHint: true, destructiveHint: false } as const;
 const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
@@ -339,6 +339,68 @@ export function registerNotebookTools(server: McpServer, fabricClient: FabricCli
       try {
         await cancelJobInstance(fabricClient, workspaceId, notebookId, jobInstanceId);
         return { content: [{ type: "text", text: `Notebook run ${jobInstanceId} cancelled successfully` }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "notebook_list_livy_sessions",
+    "List Spark Livy sessions for a notebook (session/application state, compute sizing, durations). Does not include cell output — use notebook_get_livy_log for driver/executor logs.",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      notebookId: z.string().describe("The notebook ID"),
+    },
+    READ,
+    async ({ workspaceId, notebookId }) => {
+      try {
+        const sessions = await paginateAll(fabricClient, `/workspaces/${workspaceId}/notebooks/${notebookId}/livySessions`);
+        return { content: [{ type: "text", text: JSON.stringify(sessions, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "notebook_get_livy_session",
+    "Get details of a specific Spark Livy session for a notebook (state, sparkApplicationId, compute sizing, durations, cancellation reason)",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      notebookId: z.string().describe("The notebook ID"),
+      livyId: z.string().describe("The Livy session ID (from notebook_list_livy_sessions or a LivySession's jobInstanceId lookup)"),
+    },
+    READ,
+    async ({ workspaceId, notebookId, livyId }) => {
+      try {
+        const response = await fabricClient.get(`/workspaces/${workspaceId}/notebooks/${notebookId}/livySessions/${livyId}`);
+        return { content: [{ type: "text", text: JSON.stringify(response.data, null, 2) }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "notebook_get_livy_log",
+    "Download the Livy, driver, or executor log for a notebook's Spark session to local disk. The driver log is the closest thing to notebook 'results' available via API — printed/displayed output and stack traces land there as unstructured text; there is no API for structured per-cell output.",
+    {
+      workspaceId: z.string().describe("The workspace ID"),
+      notebookId: z.string().describe("The notebook ID"),
+      livyId: z.string().describe("The Livy session ID (from notebook_list_livy_sessions)"),
+      logType: z.enum(["livy", "driver", "executor"]).default("livy").describe("Which log to fetch: livy (session lifecycle), driver (stdout/stderr — where print/display output lands), or executor"),
+      outputFilePath: z.string().describe("Local file path to write the log content to"),
+    },
+    READ,
+    async ({ workspaceId, notebookId, livyId, logType, outputFilePath }) => {
+      try {
+        const response = await fabricClient.get<unknown>(
+          `/workspaces/${workspaceId}/notebooks/${notebookId}/livySessions/${livyId}/applications/none/logs?type=${logType}`
+        );
+        const content = typeof response.data === "string" ? response.data : JSON.stringify(response.data, null, 2);
+        const written = await writeContentToFile(outputFilePath, content);
+        return { content: [{ type: "text", text: `${logType} log (${content.length} bytes) written to ${written}` }] };
       } catch (error) {
         return formatToolError(error);
       }

@@ -13,6 +13,7 @@ const FABRIC_SCOPE = "https://api.fabric.microsoft.com/.default";
 const POWERBI_SCOPE = "https://analysis.windows.net/powerbi/api/.default";
 const DATABASE_SCOPE = "https://database.windows.net/.default";
 const KUSTO_SCOPE = "https://api.kusto.windows.net/.default";
+const ONELAKE_SCOPE = "https://storage.azure.com/.default";
 const REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
 
 export type AuthMethod = "default" | "device-code" | "client-secret" | "interactive-browser";
@@ -106,13 +107,22 @@ export class TokenManager {
     return this.currentTenantId;
   }
 
-  getCachedToken(scope: "fabric" | "powerbi" | "database" | "kusto"): AccessToken | undefined {
-    const scopeUrl = scope === "fabric" ? FABRIC_SCOPE : scope === "powerbi" ? POWERBI_SCOPE : scope === "kusto" ? KUSTO_SCOPE : DATABASE_SCOPE;
-    return this.cache.get(scopeUrl);
+  private resolveScopeUrl(scope: "fabric" | "powerbi" | "database" | "kusto" | "onelake"): string {
+    switch (scope) {
+      case "fabric": return FABRIC_SCOPE;
+      case "powerbi": return POWERBI_SCOPE;
+      case "kusto": return KUSTO_SCOPE;
+      case "onelake": return ONELAKE_SCOPE;
+      default: return DATABASE_SCOPE;
+    }
   }
 
-  async getToken(scope: "fabric" | "powerbi" | "database" | "kusto"): Promise<string> {
-    const scopeUrl = scope === "fabric" ? FABRIC_SCOPE : scope === "powerbi" ? POWERBI_SCOPE : scope === "kusto" ? KUSTO_SCOPE : DATABASE_SCOPE;
+  getCachedToken(scope: "fabric" | "powerbi" | "database" | "kusto" | "onelake"): AccessToken | undefined {
+    return this.cache.get(this.resolveScopeUrl(scope));
+  }
+
+  async getToken(scope: "fabric" | "powerbi" | "database" | "kusto" | "onelake"): Promise<string> {
+    const scopeUrl = this.resolveScopeUrl(scope);
     const cached = this.cache.get(scopeUrl);
     if (cached && cached.expiresOnTimestamp - Date.now() > REFRESH_BUFFER_MS) {
       return cached.token;
@@ -236,5 +246,9 @@ export class TokenManager {
 
   async getKustoToken(): Promise<string> {
     return this.getToken("kusto");
+  }
+
+  async getOneLakeToken(): Promise<string> {
+    return this.getToken("onelake");
   }
 }
